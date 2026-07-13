@@ -177,7 +177,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "121";
+const APP_VERSION = "122";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -2025,6 +2025,7 @@ function renderCloudSync() {
   const syncActive = Boolean(cloudSync.available && cloudSync.ready && cloudSync.user);
   const syncing = /laden|check|inloggen|maken/i.test(cloudSync.status);
   const failed = /mislukt/i.test(cloudSync.status);
+  const cloudProtected = syncActive && !failed;
   els.cloudStatus.textContent = syncActive && !syncing && !failed
     ? (cloudSync.lastSyncedAt
       ? `Automatisch gesynchroniseerd · ${formatDateTimeShort(cloudSync.lastSyncedAt)}`
@@ -2032,7 +2033,7 @@ function renderCloudSync() {
     : cloudSync.status;
 
   const configured = Boolean(getFirebaseConfig());
-  if (els.backupFallback) els.backupFallback.hidden = syncActive;
+  if (els.backupFallback) els.backupFallback.hidden = cloudProtected;
   if (els.cloudAuth) {
     els.cloudAuth.hidden = !configured || Boolean(cloudSync.user);
   }
