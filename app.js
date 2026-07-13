@@ -177,7 +177,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "123";
+const APP_VERSION = "124";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -1329,7 +1329,6 @@ function runAction(trigger) {
   if (action === "quick-export") exportData();
   if (action === "import-data") els.importFile?.click();
   if (action === "cloud-login") cloudLogin();
-  if (action === "cloud-signup") cloudSignup();
   if (action === "cloud-sync-now") syncCloudNow();
   if (action === "cloud-logout") cloudLogout();
   if (action === "reset-all") resetAll();
@@ -2065,22 +2064,6 @@ async function cloudLogin() {
     cloudSync.status = "Inloggen mislukt.";
     renderCloudSync();
     showToast("Inloggen mislukt");
-  }
-}
-
-async function cloudSignup() {
-  const credentials = getCloudCredentials();
-  if (!credentials || !cloudSync.modules?.authMod || !cloudSync.auth) return;
-  try {
-    cloudSync.status = "Account maken...";
-    renderCloudSync();
-    await cloudSync.modules.authMod.createUserWithEmailAndPassword(cloudSync.auth, credentials.email, credentials.password);
-    if (els.cloudPassword) els.cloudPassword.value = "";
-    showToast("Cloud account klaar");
-  } catch {
-    cloudSync.status = "Account maken mislukt.";
-    renderCloudSync();
-    showToast("Account mislukt");
   }
 }
 
