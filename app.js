@@ -116,6 +116,7 @@ const sessions = [
       ex("neck-twist", "Neck twist", 2, "10"),
       ex("riser-holt", "Riser holt", 2),
       ex("cable-bends", "Cable bends", 2, "10"),
+      ex("smith-traps-d", "Smith traps", 2),
     ],
   },
   {
@@ -264,6 +265,34 @@ function ex(id, name, setCount, kindOrSetup = "strength", setup = "") {
   };
 }
 
+function getProgramExerciseName(exercise) {
+  const override = state.exerciseNames?.[exercise?.id];
+  return String(override || exercise?.name || "").trim() || exercise?.name || "Oefening";
+}
+
+function setProgramExerciseName(exerciseId, value) {
+  const session = findSession(state.activeSessionId);
+  const exercise = session?.exercises.find((item) => item.id === exerciseId);
+  if (!exercise) return;
+
+  const previousName = getProgramExerciseName(exercise);
+  const nextName = String(value || "").trim();
+  state.exerciseNames ||= {};
+
+  if (!nextName || nextName === exercise.name) {
+    delete state.exerciseNames[exerciseId];
+  } else {
+    state.exerciseNames[exerciseId] = nextName;
+  }
+
+  const previousMetric = `exercise:${normalizeExerciseName(previousName)}`;
+  if (state.chartMetric === previousMetric) {
+    state.chartMetric = `exercise:${normalizeExerciseName(getProgramExerciseName(exercise))}`;
+  }
+
+  historyCache.ref = null;
+}
+
 function init() {
   bindElements();
   installListeners();
@@ -365,6 +394,7 @@ function ensureDefaults() {
   if (state.cycleCompleted.length >= cycleOrder.length) state.cycleCompleted = [];
   if (!state.workouts) state.workouts = {};
   if (!Array.isArray(state.history)) state.history = [];
+  if (!state.exerciseNames || Array.isArray(state.exerciseNames) || typeof state.exerciseNames !== "object") state.exerciseNames = {};
   if (state.editingHistoryId && !state.history.some((entry) => entry.id === state.editingHistoryId)) state.editingHistoryId = null;
   if (!CHART_GROUPS.includes(state.chartGroup)) state.chartGroup = "Upper";
   if (!getChartFilters(state.chartGroup).some((filter) => filter.value === state.chartFilter)) state.chartFilter = "all";
@@ -804,7 +834,7 @@ function renderOverigQuickAdd(session) {
     .map((exercise) => `
       <button class="preset-chip" type="button" data-action="add-preset" data-preset-id="${escapeAttr(exercise.id)}">
         <i data-lucide="plus"></i>
-        <span>${escapeHtml(getPresetShortLabel(exercise.name))}</span>
+        <span>${escapeHtml(getPresetShortLabel(getProgramExerciseName(exercise)))}</span>
       </button>
     `)
     .join("");
@@ -837,8 +867,10 @@ function renderExerciseCard(exercise, workout, index, options = {}) {
   const ref = { exerciseId: exercise.id };
   const cardKey = getRefKey(ref);
   const isOpen = uiState.expandedCards.has(cardKey);
+  const isEditingName = uiState.editingName === cardKey;
   const isEditingSetup = isOpen && uiState.editingSetup === cardKey;
-  const target = { name: exercise.name, kind };
+  const exerciseName = getProgramExerciseName(exercise);
+  const target = { name: exerciseName, kind };
   const previous = isOpen ? getActivityHistory(target) : [];
   const placeholderSource = isOpen ? getLatestActivitySnapshot(target) : null;
   return `
@@ -846,7 +878,11 @@ function renderExerciseCard(exercise, workout, index, options = {}) {
       <header class="exercise-head">
         <span class="exercise-index">${String(index + 1).padStart(2, "0")}</span>
         <div class="exercise-title">
-          <h3>${escapeHtml(exercise.name)}</h3>
+          ${isEditingName ? `
+            <input class="activity-name-input" type="text" data-field="exercise-name" ${getRefAttrs(ref)} value="${escapeAttr(exerciseName)}" data-original-value="${escapeAttr(exerciseName)}" aria-label="Naam">
+          ` : `
+            <button class="activity-name-display" type="button" data-action="edit-exercise-name" ${getRefAttrs(ref)}>${escapeHtml(exerciseName)}</button>
+          `}
           ${renderExerciseSubtitle(summary, entry, ref, isOpen, isEditingSetup)}
         </div>
         ${renderCardControls(ref, summary, isOpen, entry, options)}
@@ -1275,6 +1311,7 @@ function runAction(trigger) {
   if (action === "history-newer") shiftPreviousHistory(trigger, -1);
   if (action === "history-older") shiftPreviousHistory(trigger, 1);
   if (action === "edit-setup") editSetup(trigger);
+  if (action === "edit-exercise-name") editProgramExerciseName(trigger);
   if (action === "edit-name") editActivityName(trigger);
   if (action === "complete-session") completeSession();
   if (action === "reset-current") resetCurrent();
@@ -1318,6 +1355,22 @@ function runAction(trigger) {
 }
 
 function handleKeydown(event) {
+  if (event.target?.dataset?.field === "exercise-name") {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      event.target.blur();
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      const ref = getRefFromElement(event.target);
+      setProgramExerciseName(ref.exerciseId, event.target.dataset.originalValue || "");
+      saveState();
+      finishNameEdit();
+      return;
+    }
+  }
+
   if (event.target?.dataset?.field === "activity-name") {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -1363,6 +1416,13 @@ function handleKeydown(event) {
 
 function handleInput(event) {
   const target = event.target;
+  if (target.dataset.field === "exercise-name") {
+    const ref = getRefFromElement(target);
+    setProgramExerciseName(ref.exerciseId, target.value);
+    saveState();
+    return;
+  }
+
   if (target.dataset.field === "exercise-setup") {
     const workout = getActiveWorkout();
     const entry = getEntryFromElement(workout, target);
@@ -1423,6 +1483,13 @@ function handleInput(event) {
 }
 
 function handleFocusOut(event) {
+  if (event.target.dataset.field === "exercise-name") {
+    const ref = getRefFromElement(event.target);
+    setProgramExerciseName(ref.exerciseId, event.target.value);
+    saveState();
+    finishNameEdit();
+  }
+
   if (event.target.dataset.field === "activity-name") {
     finishNameEdit();
   }
@@ -1492,6 +1559,17 @@ function editActivityName(trigger) {
   renderTraining();
   requestAnimationFrame(() => {
     const input = els.exerciseList?.querySelector('[data-field="activity-name"]');
+    input?.focus();
+    input?.select();
+  });
+}
+
+function editProgramExerciseName(trigger) {
+  const key = getRefKey(getRefFromElement(trigger));
+  uiState.editingName = key;
+  renderTraining();
+  requestAnimationFrame(() => {
+    const input = els.exerciseList?.querySelector('[data-field="exercise-name"]');
     input?.focus();
     input?.select();
   });
@@ -2184,7 +2262,7 @@ function makeExerciseEntry(exercise) {
     const targetCount = Math.max(1, Number(exercise.setCount) || 1);
     return {
       kind,
-      name: exercise.name,
+      name: getProgramExerciseName(exercise),
       setup: exercise.setup || "",
       note: "",
       targetCount,
@@ -2195,7 +2273,7 @@ function makeExerciseEntry(exercise) {
   }
   return {
     kind: "strength",
-    name: exercise.name,
+    name: getProgramExerciseName(exercise),
     setup: exercise.setup || "",
     note: "",
     sets: Array.from({ length: exercise.setCount }, makeSet),
@@ -2288,7 +2366,7 @@ function normalizeWorkout(workout, session) {
 function normalizeEntry(entry, exercise) {
   const kind = entry.kind || exercise?.kind || "strength";
   entry.kind = kind;
-  if (!entry.name && exercise?.name) entry.name = exercise.name;
+  if (!entry.name && exercise?.name) entry.name = getProgramExerciseName(exercise);
   if (entry.setup === undefined) entry.setup = exercise?.setup || "";
   entry.setup = normalizeSetupLabel(entry.setup);
   entry.note ||= "";
@@ -2461,7 +2539,7 @@ function getActivityTargetFromRef(ref, entry) {
   const session = findSession(state.activeSessionId);
   const exercise = session?.exercises.find((item) => item.id === ref.exerciseId);
   return {
-    name: exercise?.name || entry.name || ref.exerciseId,
+    name: getProgramExerciseName(exercise) || entry.name || ref.exerciseId,
     kind: getEntryKind(entry),
   };
 }
@@ -2532,7 +2610,7 @@ function getHistoryActivityEntries(historyEntry) {
       const entry = workout.exercises?.[exercise.id];
       if (!entry) return null;
       return {
-        name: exercise.name,
+        name: getProgramExerciseName(exercise),
         kind: entry.kind || exercise.kind || "strength",
         entry,
       };
@@ -3061,7 +3139,7 @@ function getStrengthRecords(group, filter, rangeDays = getStatsRangeDays()) {
     session.exercises
       .filter((exercise) => matchesChartFilter(exercise, group, filter))
       .forEach((exercise) => {
-        const name = exercise.name;
+        const name = getProgramExerciseName(exercise);
         const entry = workout.exercises?.[exercise.id];
         const score = getExerciseFirstSetE1rm(entry);
         if (score === null) return;
@@ -3226,8 +3304,8 @@ function getChartMetrics(group, filter = "all") {
     .flatMap((session) => session.exercises)
     .filter((exercise) => matchesChartFilter(exercise, group, filter))
     .map((exercise) => ({
-      value: `exercise:${normalizeExerciseName(exercise.name)}`,
-      label: exercise.name,
+      value: `exercise:${normalizeExerciseName(getProgramExerciseName(exercise))}`,
+      label: getProgramExerciseName(exercise),
     }))
     .filter((metric) => {
       if (seen.has(metric.value)) return false;
@@ -3312,7 +3390,7 @@ function getExerciseTrendValue(historyEntry, exerciseKey) {
 
   let best = null;
   session.exercises.forEach((exercise) => {
-    if (normalizeExerciseName(exercise.name) !== exerciseKey) return;
+    if (normalizeExerciseName(getProgramExerciseName(exercise)) !== exerciseKey) return;
     const value = getExerciseFirstSetE1rm(workout.exercises?.[exercise.id]);
     if (value !== null && (best === null || value > best)) best = value;
   });
