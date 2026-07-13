@@ -14,10 +14,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=120">
+  <link rel="stylesheet" href="styles.css?v=121">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=120" defer></script>
-  <script src="app.js?v=120" defer></script>
+  <script src="firebase-config.js?v=121" defer></script>
+  <script src="app.js?v=121" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -104,25 +104,10 @@
           <div id="chart-readout" class="chart-readout"></div>
         </section>
         <div id="records-list" class="records-list"></div>
-        <section class="backup-panel chart-panel" aria-label="Backup">
-          <div>
-            <div class="record-title">Backup</div>
-            <div class="record-meta">Bewaar exports in iCloud Drive.</div>
-          </div>
-          <div class="data-actions">
-            <button class="mini-button" type="button" data-action="quick-export">
-              <i data-lucide="download"></i>
-              <span>Export</span>
-            </button>
-            <button class="mini-button" type="button" data-action="import-data">
-              <i data-lucide="upload"></i>
-              <span>Import</span>
-            </button>
-          </div>
-          <div id="storage-readout" class="storage-readout"></div>
+        <section id="backup-panel" class="backup-panel chart-panel" aria-label="Sync en backup">
           <div class="cloud-panel" aria-label="Cloud sync">
             <div>
-              <div class="record-title">Cloud sync</div>
+              <div class="record-title">Sync</div>
               <div id="cloud-status" class="record-meta">Firebase nog niet ingesteld.</div>
             </div>
             <div id="cloud-auth" class="cloud-auth">
@@ -131,16 +116,25 @@
               <button class="mini-button" type="button" data-action="cloud-login">Inloggen</button>
               <button class="mini-button" type="button" data-action="cloud-signup">Account maken</button>
             </div>
-            <div id="cloud-user-actions" class="data-actions cloud-user-actions" hidden>
-              <button class="mini-button" type="button" data-action="cloud-sync-now">
-                <i data-lucide="refresh-cw"></i>
-                <span>Sync nu</span>
-              </button>
-              <button class="mini-button" type="button" data-action="cloud-logout">
+            <div id="cloud-user-actions" class="cloud-user-actions" hidden>
+              <button class="icon-button" type="button" data-action="cloud-logout" title="Uitloggen" aria-label="Uitloggen">
                 <i data-lucide="log-out"></i>
-                <span>Uitloggen</span>
               </button>
             </div>
+          </div>
+          <div id="backup-fallback" class="backup-fallback">
+            <div class="record-meta">Lokale kopie voor zolang sync nog niet actief is.</div>
+            <div class="data-actions">
+              <button class="mini-button" type="button" data-action="quick-export">
+                <i data-lucide="download"></i>
+                <span>Export</span>
+              </button>
+              <button class="mini-button" type="button" data-action="import-data">
+                <i data-lucide="upload"></i>
+                <span>Import</span>
+              </button>
+            </div>
+            <div id="storage-readout" class="storage-readout"></div>
           </div>
           <input id="import-file" type="file" accept="application/json,.json" hidden>
         </section>

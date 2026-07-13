@@ -1219,8 +1219,23 @@ h1 {
 
 .cloud-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   min-width: 0;
+  align-items: start;
+}
+
+.cloud-auth {
+  grid-column: 1 / -1;
+}
+
+.backup-fallback {
+  display: grid;
+  gap: 10px;
+}
+
+.backup-fallback[hidden] {
+  display: none;
 }
 
 .cloud-auth {
@@ -1248,11 +1263,15 @@ h1 {
 }
 
 .cloud-user-actions {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  grid-column: 2;
+  grid-row: 1;
 }
 
-.cloud-user-actions .mini-button {
-  justify-content: center;
+.cloud-user-actions[hidden] {
+  display: none;
 }
 
 .chart-controls {

@@ -177,6 +177,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
+const APP_VERSION = "121";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -326,6 +327,7 @@ function bindElements() {
   els.chartEmpty = document.getElementById("e1rm-empty");
   els.chartReadout = document.getElementById("chart-readout");
   els.recordsList = document.getElementById("records-list");
+  els.backupFallback = document.getElementById("backup-fallback");
   els.storageReadout = document.getElementById("storage-readout");
   els.cloudStatus = document.getElementById("cloud-status");
   els.cloudAuth = document.getElementById("cloud-auth");
@@ -2020,11 +2022,17 @@ async function initCloudSync() {
 
 function renderCloudSync() {
   if (!els.cloudStatus) return;
-  els.cloudStatus.textContent = cloudSync.lastSyncedAt
-    ? `${cloudSync.status} Laatste sync: ${formatDateTimeShort(cloudSync.lastSyncedAt)}.`
+  const syncActive = Boolean(cloudSync.available && cloudSync.ready && cloudSync.user);
+  const syncing = /laden|check|inloggen|maken/i.test(cloudSync.status);
+  const failed = /mislukt/i.test(cloudSync.status);
+  els.cloudStatus.textContent = syncActive && !syncing && !failed
+    ? (cloudSync.lastSyncedAt
+      ? `Automatisch gesynchroniseerd · ${formatDateTimeShort(cloudSync.lastSyncedAt)}`
+      : "Automatische sync actief.")
     : cloudSync.status;
 
   const configured = Boolean(getFirebaseConfig());
+  if (els.backupFallback) els.backupFallback.hidden = syncActive;
   if (els.cloudAuth) {
     els.cloudAuth.hidden = !configured || Boolean(cloudSync.user);
   }
@@ -4049,5 +4057,7 @@ function refreshIcons() {
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   if (!["http:", "https:"].includes(location.protocol)) return;
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  navigator.serviceWorker.register(`sw.js?v=${APP_VERSION}`, { updateViaCache: "none" })
+    .then((registration) => registration.update())
+    .catch(() => {});
 }
