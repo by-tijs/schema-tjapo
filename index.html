@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#090a0b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Schema Tjapo">
+  <title>Schema Tjapo</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="favicon-32.png" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=118">
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
+  <script src="firebase-config.js?v=118" defer></script>
+  <script src="app.js?v=118" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="view-tabs" aria-label="Navigatie">
+      <a href="#train" data-view-link="train" class="is-active">
+        <i data-lucide="dumbbell"></i>
+        <span>Train</span>
+      </a>
+      <a href="#log" data-view-link="log">
+        <i data-lucide="history"></i>
+        <span>Log</span>
+      </a>
+      <a href="#stats" data-view-link="stats">
+        <i data-lucide="chart-no-axes-combined"></i>
+        <span>Stats</span>
+      </a>
+    </nav>
+
+    <main>
+      <section class="view is-active" data-view="train" aria-labelledby="train-title">
+        <div class="workbench">
+          <aside class="side-panel">
+            <div id="session-rail" class="session-rail" aria-label="Sessies"></div>
+          </aside>
+
+          <section class="training-panel">
+            <div class="session-heading">
+              <h1 id="train-title"><span id="train-title-label"></span><span id="train-progress-count" class="title-progress"></span></h1>
+              <div class="date-field">
+                <input id="training-date" type="hidden">
+                <button id="training-date-button" class="date-control" type="button" data-action="open-date-picker" aria-haspopup="dialog" aria-expanded="false">
+                  <span id="training-date-label">12-07-2026</span>
+                  <i data-lucide="calendar-days"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="exercise-list" class="exercise-list"></div>
+
+            <div class="finish-bar">
+              <div class="finish-actions">
+                <button class="reset-button" type="button" data-action="reset-current">
+                  <i data-lucide="rotate-ccw"></i>
+                  <span>Reset</span>
+                </button>
+                <button class="primary-button" type="button" data-action="complete-session">
+                  <i data-lucide="check"></i>
+                  <span>Afronden</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" data-view="log" aria-label="Training log">
+        <div id="history-list" class="history-list"></div>
+      </section>
+
+      <section class="view" data-view="stats" aria-label="Stats">
+        <div id="stats-grid" class="stats-grid"></div>
+        <section class="chart-panel" aria-label="Stats grafiek">
+          <div class="chart-controls">
+            <div class="segment-control" aria-label="Groep">
+              <button type="button" data-action="chart-group" data-chart-group="Upper">Upper</button>
+              <button type="button" data-action="chart-group" data-chart-group="Lower">Lower</button>
+              <button type="button" data-action="chart-group" data-chart-group="Running">Running</button>
+            </div>
+            <div class="segment-control range-control" aria-label="Periode">
+              <button type="button" data-action="chart-range" data-range-days="30">30d</button>
+              <button type="button" data-action="chart-range" data-range-days="90">90d</button>
+              <button type="button" data-action="chart-range" data-range-days="365">365d</button>
+            </div>
+            <div id="chart-filter-control" class="filter-control" aria-label="Filter"></div>
+            <label class="field chart-metric-field">
+              <span>Metric</span>
+              <select id="e1rm-metric-select"></select>
+            </label>
+          </div>
+          <div class="chart-stage">
+            <canvas id="e1rm-chart" width="900" height="340" aria-label="Estimated one rep max trend"></canvas>
+            <div id="e1rm-empty" class="empty-state" hidden>Nog geen data voor deze keuze.</div>
+          </div>
+          <div id="chart-readout" class="chart-readout"></div>
+        </section>
+        <div id="records-list" class="records-list"></div>
+        <section class="backup-panel chart-panel" aria-label="Backup">
+          <div>
+            <div class="record-title">Backup</div>
+            <div class="record-meta">Bewaar exports in iCloud Drive.</div>
+          </div>
+          <div class="data-actions">
+            <button class="mini-button" type="button" data-action="quick-export">
+              <i data-lucide="download"></i>
+              <span>Export</span>
+            </button>
+            <button class="mini-button" type="button" data-action="import-data">
+              <i data-lucide="upload"></i>
+              <span>Import</span>
+            </button>
+          </div>
+          <div id="storage-readout" class="storage-readout"></div>
+          <div class="cloud-panel" aria-label="Cloud sync">
+            <div>
+              <div class="record-title">Cloud sync</div>
+              <div id="cloud-status" class="record-meta">Firebase nog niet ingesteld.</div>
+            </div>
+            <div id="cloud-auth" class="cloud-auth">
+              <input id="cloud-email" class="cloud-input" type="email" inputmode="email" autocomplete="email" placeholder="email">
+              <input id="cloud-password" class="cloud-input" type="password" autocomplete="current-password" placeholder="wachtwoord">
+              <button class="mini-button" type="button" data-action="cloud-login">Inloggen</button>
+              <button class="mini-button" type="button" data-action="cloud-signup">Account maken</button>
+            </div>
+            <div id="cloud-user-actions" class="data-actions cloud-user-actions" hidden>
+              <button class="mini-button" type="button" data-action="cloud-sync-now">
+                <i data-lucide="refresh-cw"></i>
+                <span>Sync nu</span>
+              </button>
+              <button class="mini-button" type="button" data-action="cloud-logout">
+                <i data-lucide="log-out"></i>
+                <span>Uitloggen</span>
+              </button>
+            </div>
+          </div>
+          <input id="import-file" type="file" accept="application/json,.json" hidden>
+        </section>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="confirm-modal" class="confirm-modal" hidden>
+    <button class="confirm-backdrop" type="button" data-action="cancel-confirm" aria-label="Sluiten"></button>
+    <section class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <div>
+        <h2 id="confirm-title">Training resetten?</h2>
+        <p id="confirm-message">Je hebt al dingen ingevuld. Dit wist deze dag.</p>
+      </div>
+      <div class="confirm-actions">
+        <button class="ghost-button" type="button" data-action="cancel-confirm">Terug</button>
+        <button class="reset-button" type="button" data-action="confirm-pending">
+          <i data-lucide="trash-2"></i>
+          <span id="confirm-action-label">Verwijder</span>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <div id="date-picker" class="date-picker" hidden>
+    <button class="date-picker-backdrop" type="button" data-action="close-date-picker" aria-label="Sluiten"></button>
+    <section class="date-picker-card" role="dialog" aria-modal="true" aria-label="Datum kiezen">
+      <div class="date-picker-grabber" aria-hidden="true"></div>
+      <div class="date-picker-head">
+        <button class="mini-button icon-mini" type="button" data-action="calendar-prev-month" aria-label="Vorige maand">
+          <i data-lucide="chevron-left"></i>
+        </button>
+        <div>
+          <strong id="date-picker-month">juli 2026</strong>
+          <span id="date-picker-selected">12-07-2026</span>
+        </div>
+        <button class="mini-button icon-mini" type="button" data-action="calendar-next-month" aria-label="Volgende maand">
+          <i data-lucide="chevron-right"></i>
+        </button>
+      </div>
+      <div class="date-picker-quick" aria-label="Snelle datumkeuze">
+        <button type="button" data-action="calendar-relative" data-date-offset="-1">Gisteren</button>
+        <button type="button" data-action="calendar-relative" data-date-offset="0">Vandaag</button>
+        <button type="button" data-action="calendar-relative" data-date-offset="1">Morgen</button>
+      </div>
+      <div class="date-picker-calendar">
+        <div class="date-picker-weekdays" aria-hidden="true"></div>
+        <div id="date-picker-grid" class="date-picker-grid"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
