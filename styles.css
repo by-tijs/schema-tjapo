@@ -1197,6 +1197,10 @@ h1 {
   display: grid;
   gap: 12px;
   margin-bottom: 14px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .backup-panel {
@@ -1254,6 +1258,9 @@ h1 {
 .chart-controls {
   display: grid;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .range-control {
@@ -1274,6 +1281,8 @@ h1 {
 
 .segment-control {
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
@@ -1306,7 +1315,7 @@ h1 {
 .filter-control {
   position: relative;
   min-width: 0;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   display: flex;
   gap: 6px;
@@ -1349,6 +1358,9 @@ h1 {
 
 .chart-stage {
   position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 280px;
   overflow: hidden;
   border: 1px solid var(--line-soft);
@@ -1784,6 +1796,7 @@ h1 {
   .filter-control {
     grid-column: 1 / -1;
     grid-row: 2;
+    width: fit-content;
   }
 
   .filter-control::after {

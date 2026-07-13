@@ -1460,7 +1460,7 @@ function selectSession(sessionId) {
   clearEditingHistoryIfActiveTargetChanged();
   getActiveWorkout();
   collapseExerciseCards();
-  saveState(true);
+  saveState();
   renderAll();
 }
 
