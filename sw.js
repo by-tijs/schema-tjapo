@@ -1,12 +1,12 @@
 "use strict";
 
-const CACHE_NAME = "schema-tjapo-cache-v124";
+const CACHE_NAME = "schema-tjapo-cache-v125";
 const CORE_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=124",
-  "./firebase-config.js?v=124",
-  "./app.js?v=124",
+  "./styles.css?v=125",
+  "./firebase-config.js?v=125",
+  "./app.js?v=125",
   "./manifest.webmanifest",
   "./favicon-32.png",
   "./apple-touch-icon.png",

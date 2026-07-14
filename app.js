@@ -10,9 +10,9 @@ const sessions = [
     cycle: true,
     exercises: [
       ex("paused-bench", "Paused Bench", 3, "16"),
-      ex("weighted-pull-ups", "Weighted pull ups", 2),
-      ex("single-cable-press", "Single cable press", 2, "-22"),
-      ex("cuffed-laterial", "Cuffed Laterial", 2, "-25"),
+      bodyweight("weighted-pull-ups", "Weighted pull ups", 2),
+      unilateral("single-cable-press", "Single cable press", 2, "-22"),
+      unilateral("cuffed-laterial", "Cuffed Laterial", 2, "-25"),
       ex("db-incline-curls", "Db incline curls", 2),
       ex("jm-press", "JM press", 2, "hoogste"),
     ],
@@ -24,7 +24,7 @@ const sessions = [
     cycle: true,
     exercises: [
       ex("slow-eccentric-bench", "Slow eccentric bench", 3, "16"),
-      ex("illiac-row", "Illiac row", 2, "hoogste"),
+      unilateral("illiac-row", "Illiac row", 2, "hoogste"),
       ex("weighted-dips", "Weighted dips", 2, "17"),
       ex("seated-db-side-delts", "Seated db side delts", 2),
       ex("cable-bar-reverse-curls", "Cable bar reverse curls", 2),
@@ -38,10 +38,10 @@ const sessions = [
     cycle: true,
     exercises: [
       ex("paused-bench-c", "Paused bench", 3, "16"),
-      ex("cable-single-row", "Cable single row", 2, "1 boven L"),
+      unilateral("cable-single-row", "Cable single row", 2, "1 boven L"),
       ex("smith-incline-bench", "Smith incline bench", 2),
-      ex("cuffed-laterial-c", "Cuffed Laterial", 2, "22"),
-      ex("cable-preacher-curls", "Cable preacher curls", 2, "laagste"),
+      unilateral("cuffed-laterial-c", "Cuffed Laterial", 2, "22"),
+      unilateral("cable-preacher-curls", "Cable preacher curls", 2, "laagste"),
       ex("seated-bar-pushdowns", "Seated bar pushdowns", 2),
     ],
   },
@@ -56,7 +56,7 @@ const sessions = [
       ex("smith-shoulder-press", "Smith shoulder press", 2),
       ex("y-raises", "Y-raises", 2, "22"),
       ex("supinated-db-bicep-curls", "Supinated db bicep curls", 2),
-      ex("single-arm-pushdowns", "Single arm pushdowns", 2, "hoogste"),
+      unilateral("single-arm-pushdowns", "Single arm pushdowns", 2, "hoogste"),
     ],
   },
   {
@@ -66,12 +66,12 @@ const sessions = [
     cycle: true,
     exercises: [
       ex("smith-sissy-squats", "Smith sissy squats", 2),
-      ex("db-hamstring-curls", "Db hamstring curls", 2),
-      ex("calve-raises", "Calve raises", 2),
+      unilateral("db-hamstring-curls", "Db hamstring curls", 2),
+      unilateral("calve-raises", "Calve raises", 2),
       ex("neck-extentsions", "Neck extentsions", 2),
-      ex("db-wrist-curls", "Db wrist curls", 2),
-      ex("weighted-grip", "Weighted grip", 2, "knie"),
-      ex("cable-traps", "Cable traps", 2),
+      unilateral("db-wrist-curls", "Db wrist curls", 2),
+      unilateral("weighted-grip", "Weighted grip", 2, "knie"),
+      unilateral("cable-traps", "Cable traps", 2),
     ],
   },
   {
@@ -81,12 +81,12 @@ const sessions = [
     cycle: true,
     exercises: [
       ex("smith-sissy-squats-b", "Smith sissy squats", 2),
-      ex("db-hamstring-curls-b", "Db hamstring curls", 2),
-      ex("calve-raises-b", "Calve raises", 2),
-      ex("neck-side", "Neck side", 2, "12"),
-      ex("riser-lift", "Riser lift", 2),
-      ex("squeeze-hand", "Squeeze hand", 2, "hoogste"),
-      ex("cable-obliques", "Cable obliques", 2, "12"),
+      unilateral("db-hamstring-curls-b", "Db hamstring curls", 2),
+      unilateral("calve-raises-b", "Calve raises", 2),
+      unilateral("neck-side", "Neck side", 2, "12"),
+      unilateral("riser-lift", "Riser lift", 2),
+      unilateral("squeeze-hand", "Squeeze hand", 2, "hoogste"),
+      unilateral("cable-obliques", "Cable obliques", 2, "12"),
     ],
   },
   {
@@ -96,12 +96,12 @@ const sessions = [
     cycle: true,
     exercises: [
       ex("smith-sissy-squats-c", "Smith sissy squats", 2),
-      ex("db-hamstring-curls-c", "Db hamstring curls", 2),
-      ex("calve-raises-c", "Calve raises", 2),
+      unilateral("db-hamstring-curls-c", "Db hamstring curls", 2),
+      unilateral("calve-raises-c", "Calve raises", 2),
       ex("neck-curls", "Neck curls", 2, "4"),
-      ex("single-arm-dead-hang", "Single arm dead hang", 2),
+      unilateral("single-arm-dead-hang", "Single arm dead hang", 2),
       ex("cable-crunches", "Cable crunches", 2, "hoogste"),
-      ex("side-pressure", "Side pressure", 2, "-20"),
+      unilateral("side-pressure", "Side pressure", 2, "-20"),
     ],
   },
   {
@@ -111,12 +111,12 @@ const sessions = [
     cycle: false,
     exercises: [
       ex("smith-sissy-squats-d", "Smith sissy squats", 2),
-      ex("db-hamstring-curls-d", "Db hamstring curls", 2),
-      ex("calve-raises-d", "Calve raises", 2),
-      ex("neck-twist", "Neck twist", 2, "10"),
-      ex("riser-holt", "Riser holt", 2),
-      ex("cable-bends", "Cable bends", 2, "10"),
-      ex("smith-traps-d", "Smith traps", 2),
+      unilateral("db-hamstring-curls-d", "Db hamstring curls", 2),
+      unilateral("calve-raises-d", "Calve raises", 2),
+      unilateral("neck-twist", "Neck twist", 2, "10"),
+      unilateral("riser-holt", "Riser holt", 2),
+      unilateral("cable-bends", "Cable bends", 2, "10"),
+      unilateral("smith-traps-d", "Smith traps", 2),
     ],
   },
   {
@@ -173,13 +173,14 @@ const CHART_FILTERS = {
 const MAX_EFFECTIVE_REPS_FOR_E1RM = 50;
 const MAX_RIR_FROM_RPE = 5;
 const TAIL_SET_WEIGHT_DECAY = 0.67;
+const DEFAULT_BODYWEIGHT_KG = 94;
 const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "124";
+const APP_VERSION = "125";
 const FIREBASE_SDK_VERSION = "12.16.0";
-const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "distance", "intensity", "amount", "speed", "metric-rpe"]);
+const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
 const CALENDAR_WEEKDAYS = ["ma", "di", "wo", "do", "vr", "za", "zo"];
 
@@ -254,7 +255,7 @@ const els = {};
 
 document.addEventListener("DOMContentLoaded", init);
 
-function ex(id, name, setCount, kindOrSetup = "strength", setup = "") {
+function ex(id, name, setCount, kindOrSetup = "strength", setup = "", options = {}) {
   const knownKinds = ["strength", "run", "cardio", "other"];
   const kind = knownKinds.includes(kindOrSetup) ? kindOrSetup : "strength";
   return {
@@ -263,7 +264,16 @@ function ex(id, name, setCount, kindOrSetup = "strength", setup = "") {
     setCount,
     kind,
     setup: knownKinds.includes(kindOrSetup) ? setup : kindOrSetup,
+    ...options,
   };
+}
+
+function unilateral(id, name, setCount, setup = "") {
+  return ex(id, name, setCount, "strength", setup, { unilateral: true });
+}
+
+function bodyweight(id, name, setCount, setup = "") {
+  return ex(id, name, setCount, "strength", setup, { usesBodyweight: true });
 }
 
 function getProgramExerciseName(exercise) {
@@ -397,6 +407,7 @@ function ensureDefaults() {
   if (!state.workouts) state.workouts = {};
   if (!Array.isArray(state.history)) state.history = [];
   if (!state.exerciseNames || Array.isArray(state.exerciseNames) || typeof state.exerciseNames !== "object") state.exerciseNames = {};
+  if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = String(DEFAULT_BODYWEIGHT_KG);
   if (state.editingHistoryId && !state.history.some((entry) => entry.id === state.editingHistoryId)) state.editingHistoryId = null;
   if (!CHART_GROUPS.includes(state.chartGroup)) state.chartGroup = "Upper";
   if (!getChartFilters(state.chartGroup).some((filter) => filter.value === state.chartFilter)) state.chartFilter = "all";
@@ -996,13 +1007,16 @@ function renderEntryBody(entry, ref, removable = false, previous = [], placehold
     return renderOtherMetricBody(entry, ref, removable, last);
   }
 
-  const rows = (entry.sets || []).map((set, setIndex) => renderSetRow(ref, set, setIndex, last?.sets?.[setIndex])).join("");
+  const unilateral = isUnilateralEntry(entry);
+  const rows = (entry.sets || []).map((set, setIndex) => renderSetRow(ref, set, setIndex, last?.sets?.[setIndex], entry)).join("");
   const hasSets = (entry.sets || []).length > 0;
   return `
     <div class="set-list">
+      ${renderBodyweightControl(entry, ref)}
       ${hasSets ? `
-        <div class="set-field-labels" aria-hidden="true">
-          <span>kg</span>
+        <div class="set-field-labels${unilateral ? " is-unilateral" : ""}" aria-hidden="true">
+          ${unilateral ? "<span>side</span>" : ""}
+          <span>${usesBodyweightLoad(entry) ? "+kg" : "kg"}</span>
           <span>reps</span>
           <span>rpe</span>
         </div>
@@ -1011,6 +1025,17 @@ function renderEntryBody(entry, ref, removable = false, previous = [], placehold
     </div>
     ${renderEntryNote(entry, ref, last)}
     ${removable ? renderCustomActions(ref) : ""}
+  `;
+}
+
+function renderBodyweightControl(entry, ref) {
+  if (!usesBodyweightLoad(entry)) return "";
+  return `
+    <label class="bodyweight-control" ${getRefAttrs(ref)}>
+      <span>BW</span>
+      <input type="text" inputmode="decimal" data-field="bodyweight" value="${escapeAttr(entry.bodyweight)}" aria-label="Lichaamsgewicht in kg">
+      <em>kg</em>
+    </label>
   `;
 }
 
@@ -1134,12 +1159,35 @@ function renderCustomActions(ref) {
   `;
 }
 
-function renderSetRow(ref, set, setIndex, previousSet) {
+function renderSetRow(ref, set, setIndex, previousSet, entry) {
+  if (isUnilateralSet(set, entry)) {
+    return `
+      <div class="set-pair">
+        ${renderStrengthSideRow(ref, set, setIndex, previousSet, "left", entry)}
+        ${renderStrengthSideRow(ref, set, setIndex, previousSet, "right", entry)}
+      </div>
+    `;
+  }
+
   return `
     <div class="set-row" ${getRefAttrs(ref)} data-set-index="${setIndex}">
-      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "weight", "kg"))}" data-field="weight" value="${escapeAttr(set.weight)}">
+      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "weight", usesBodyweightLoad(entry) ? "+kg" : "kg"))}" data-field="weight" value="${escapeAttr(set.weight)}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "reps", "reps"))}" data-field="reps" value="${escapeAttr(set.reps)}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "rpe", "RPE"))}" data-field="rpe" value="${escapeAttr(set.rpe)}">
+    </div>
+  `;
+}
+
+function renderStrengthSideRow(ref, set, setIndex, previousSet, side, entry) {
+  const current = set?.[side] || makeStrengthSide();
+  const previous = previousSet?.[side] || null;
+  const label = side === "left" ? "L" : "R";
+  return `
+    <div class="set-row is-unilateral" ${getRefAttrs(ref)} data-set-index="${setIndex}" data-side="${side}">
+      <span class="set-side" aria-label="${side === "left" ? "Links" : "Rechts"}">${label}</span>
+      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "weight", usesBodyweightLoad(entry) ? "+kg" : "kg"))}" data-field="weight" value="${escapeAttr(current.weight)}">
+      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "reps", "reps"))}" data-field="reps" value="${escapeAttr(current.reps)}">
+      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "rpe", "RPE"))}" data-field="rpe" value="${escapeAttr(current.rpe)}">
     </div>
   `;
 }
@@ -1449,6 +1497,17 @@ function handleInput(event) {
     return;
   }
 
+  if (target.dataset.field === "bodyweight") {
+    const workout = getActiveWorkout();
+    const entry = getEntryFromElement(workout, target);
+    const bodyweight = normalizeInputValue(target);
+    entry.bodyweight = bodyweight;
+    if (parseNumber(bodyweight) > 0) state.bodyweight = bodyweight;
+    updateEntrySummary(target, entry);
+    saveState();
+    return;
+  }
+
   if (["distance", "duration", "intensity", "amount", "speed", "unit", "metric-rpe"].includes(target.dataset.field)) {
     const workout = getActiveWorkout();
     const entry = getEntryFromElement(workout, target);
@@ -1473,7 +1532,8 @@ function handleInput(event) {
 
   const workout = getActiveWorkout();
   const entry = getEntryFromElement(workout, row);
-  const set = entry.sets[Number(row.dataset.setIndex)];
+  const parentSet = entry.sets[Number(row.dataset.setIndex)];
+  const set = row.dataset.side ? parentSet?.[row.dataset.side] : parentSet;
   if (!set) return;
 
   set[target.dataset.field] = normalizeInputValue(target);
@@ -1708,7 +1768,12 @@ function copyPreviousEntry(trigger) {
 
   if (historyEntry.kind === "strength") {
     entry.kind = "strength";
-    entry.sets = historyEntry.sets.filter(Boolean).map((set) => ({ ...makeSet(), ...set, done: false }));
+    entry.unilateral = Boolean(historyEntry.unilateral || entry.unilateral);
+    entry.usesBodyweight = Boolean(historyEntry.usesBodyweight || entry.usesBodyweight);
+    if (entry.usesBodyweight && historyEntry.bodyweight) entry.bodyweight = historyEntry.bodyweight;
+    entry.sets = historyEntry.sets
+      .filter(Boolean)
+      .map((set) => entry.unilateral ? makeUnilateralSet(set) : makeStrengthSide(set));
   } else {
     entry.kind = historyEntry.kind;
     const attempts = historyEntry.attempts?.filter(Boolean).length ? historyEntry.attempts.filter(Boolean) : [historyEntry];
@@ -2263,17 +2328,51 @@ function makeExerciseEntry(exercise) {
       attempts: Array.from({ length: targetCount }, () => makeMetricAttempt()),
     };
   }
+  const unilateral = Boolean(exercise.unilateral);
+  const usesBodyweight = Boolean(exercise.usesBodyweight);
   return {
     kind: "strength",
     name: getProgramExerciseName(exercise),
     setup: exercise.setup || "",
     note: "",
-    sets: Array.from({ length: exercise.setCount }, makeSet),
+    unilateral,
+    usesBodyweight,
+    bodyweight: usesBodyweight ? getDefaultBodyweight() : "",
+    sets: Array.from({ length: exercise.setCount }, () => makeSet(unilateral)),
   };
 }
 
-function makeSet() {
-  return { weight: "", reps: "", rpe: "", done: false };
+function makeSet(unilateral = false) {
+  return unilateral ? makeUnilateralSet() : makeStrengthSide();
+}
+
+function makeStrengthSide(source = {}) {
+  return {
+    weight: "",
+    reps: "",
+    rpe: "",
+    done: false,
+    ...source,
+    rpe: clampZeroToTenInput(source.rpe),
+  };
+}
+
+function makeUnilateralSet(source = {}) {
+  const legacySide = {
+    weight: source.weight || "",
+    reps: source.reps || "",
+    rpe: source.rpe || "",
+  };
+  return {
+    left: makeStrengthSide(source.left || legacySide),
+    right: makeStrengthSide(source.right || legacySide),
+    done: false,
+  };
+}
+
+function getDefaultBodyweight() {
+  const bodyweight = parseNumber(state.bodyweight);
+  return String(Number.isFinite(bodyweight) && bodyweight > 0 ? bodyweight : DEFAULT_BODYWEIGHT_KG);
 }
 
 function makeMetricAttempt(source = {}) {
@@ -2379,11 +2478,15 @@ function normalizeEntry(entry, exercise) {
     return entry;
   }
   entry.kind = "strength";
-  entry.sets = Array.isArray(entry.sets) ? entry.sets : [makeSet()];
-  entry.sets = entry.sets.map((set) => ({ ...makeSet(), ...set }));
-  entry.sets.forEach((set) => {
-    set.rpe = clampZeroToTenInput(set.rpe);
-  });
+  const unilateral = Boolean(entry.unilateral || exercise?.unilateral);
+  const usesBodyweight = Boolean(entry.usesBodyweight || exercise?.usesBodyweight);
+  entry.unilateral = unilateral;
+  entry.usesBodyweight = usesBodyweight;
+  entry.bodyweight = usesBodyweight
+    ? String(parseNumber(entry.bodyweight) > 0 ? entry.bodyweight : getDefaultBodyweight())
+    : "";
+  entry.sets = Array.isArray(entry.sets) ? entry.sets : [makeSet(unilateral)];
+  entry.sets = entry.sets.map((set) => unilateral ? makeUnilateralSet(set) : makeStrengthSide(set));
   return entry;
 }
 
@@ -2498,7 +2601,7 @@ function getEntrySummary(entry, exercise) {
     };
   }
   const sets = entry.sets || [];
-  const done = sets.filter(hasCompleteStrengthSet).length;
+  const done = sets.filter((set) => hasCompleteStrengthSet(set, entry)).length;
   return {
     label: `${sets.length || exercise?.setCount || 0} sets`,
     counter: `${done}/${sets.length}`,
@@ -2601,6 +2704,7 @@ function getHistoryActivityEntries(historyEntry) {
     .map((exercise) => {
       const entry = workout.exercises?.[exercise.id];
       if (!entry) return null;
+      normalizeEntry(entry, exercise);
       return {
         name: getProgramExerciseName(exercise),
         kind: entry.kind || exercise.kind || "strength",
@@ -2611,11 +2715,14 @@ function getHistoryActivityEntries(historyEntry) {
 
   const customEntries = (workout.customItems || [])
     .filter((item) => item?.name)
-    .map((item) => ({
-      name: item.name,
-      kind: item.kind || "strength",
-      entry: item,
-    }));
+    .map((item) => {
+      normalizeEntry(item);
+      return {
+        name: item.name,
+        kind: item.kind || "strength",
+        entry: item,
+      };
+    });
 
   const entries = [...programEntries, ...customEntries];
   cache.entryActivities.set(cacheKey, entries);
@@ -2625,12 +2732,8 @@ function getHistoryActivityEntries(historyEntry) {
 function makeHistorySnapshot(candidate, historyEntry, options = {}) {
   if (candidate.kind === "strength") {
     const sets = (candidate.entry.sets || []).map((set) =>
-      hasCompleteStrengthSet(set)
-        ? {
-          weight: set.weight || "",
-          reps: set.reps || "",
-          rpe: set.rpe || "",
-        }
+      hasCompleteStrengthSet(set, candidate.entry)
+        ? cloneStrengthSet(set, candidate.entry)
         : null
     );
     const summarySets = sets.filter(Boolean);
@@ -2640,8 +2743,11 @@ function makeHistorySnapshot(candidate, historyEntry, options = {}) {
       date: historyEntry.date,
       sessionLabel: historyEntry.sessionLabel,
       note: candidate.entry.note || "",
+      unilateral: isUnilateralEntry(candidate.entry),
+      usesBodyweight: usesBodyweightLoad(candidate.entry),
+      bodyweight: usesBodyweightLoad(candidate.entry) ? candidate.entry.bodyweight : "",
       sets,
-      summary: summarySets.map(formatSetSummary).join(" / "),
+      summary: summarySets.map((set) => formatSetSummary(set, candidate.entry)).join(" / "),
     };
   }
 
@@ -2665,9 +2771,32 @@ function makeHistorySnapshot(candidate, historyEntry, options = {}) {
   };
 }
 
-function formatSetSummary(set) {
-  const main = [set.weight && `${set.weight}kg`, set.reps && `${set.reps}r`].filter(Boolean).join(" x ");
-  return hasMetricValue(set.rpe) ? `${main} @${set.rpe}` : main;
+function cloneStrengthSet(set, entry) {
+  if (isUnilateralSet(set, entry)) {
+    return {
+      left: makeStrengthSide(set.left),
+      right: makeStrengthSide(set.right),
+      done: false,
+    };
+  }
+  return makeStrengthSide(set);
+}
+
+function formatSetSummary(set, entry = {}) {
+  if (isUnilateralSet(set, entry)) {
+    return [
+      formatStrengthSideSummary(set.left, entry, "L"),
+      formatStrengthSideSummary(set.right, entry, "R"),
+    ].filter(Boolean).join(" / ");
+  }
+  return formatStrengthSideSummary(set, entry);
+}
+
+function formatStrengthSideSummary(set, entry = {}, sideLabel = "") {
+  const load = getStrengthLoadLabel(set, entry);
+  const main = [load, set?.reps && `${set.reps}r`].filter(Boolean).join(" x ");
+  const summary = hasMetricValue(set?.rpe) ? `${main} @${set.rpe}` : main;
+  return sideLabel && summary ? `${sideLabel} ${summary}` : summary;
 }
 
 function formatMetricSummary(metrics, kind = "other") {
@@ -2720,20 +2849,70 @@ function hasMetricValue(value) {
   return String(value ?? "").trim() !== "";
 }
 
-function hasCompleteStrengthSet(set) {
-  return Boolean(
-    hasMetricValue(set?.weight) &&
-    hasMetricValue(set?.reps) &&
-    hasMetricValue(set?.rpe),
-  );
+function isUnilateralEntry(entry) {
+  return Boolean(entry?.unilateral);
 }
 
-function hasTouchedStrengthSet(set) {
+function isUnilateralSet(set, entry = {}) {
+  return Boolean(isUnilateralEntry(entry) || set?.left || set?.right);
+}
+
+function usesBodyweightLoad(entry) {
+  return Boolean(entry?.usesBodyweight);
+}
+
+function getEntryBodyweight(entry) {
+  const entryBodyweight = parseNumber(entry?.bodyweight);
+  if (Number.isFinite(entryBodyweight) && entryBodyweight > 0) return entryBodyweight;
+  const defaultBodyweight = parseNumber(state.bodyweight);
+  return Number.isFinite(defaultBodyweight) && defaultBodyweight > 0 ? defaultBodyweight : DEFAULT_BODYWEIGHT_KG;
+}
+
+function getStrengthLoad(set, entry = {}) {
+  const weight = parseNumber(set?.weight);
+  if (usesBodyweightLoad(entry)) {
+    const extraWeight = Number.isFinite(weight) ? weight : 0;
+    return getEntryBodyweight(entry) + extraWeight;
+  }
+  return weight;
+}
+
+function getStrengthLoadLabel(set, entry = {}) {
+  if (usesBodyweightLoad(entry)) {
+    const bodyweight = formatNumber(getEntryBodyweight(entry));
+    const extraWeight = parseNumber(set?.weight);
+    if (!Number.isFinite(extraWeight) || extraWeight === 0) return `${bodyweight}kg BW`;
+    const sign = extraWeight > 0 ? "+" : "";
+    return `${bodyweight}${sign}${formatNumber(extraWeight)}kg`;
+  }
+  return hasMetricValue(set?.weight) ? `${set.weight}kg` : "";
+}
+
+function hasCompleteStrengthSide(set, entry = {}) {
+  const hasLoad = usesBodyweightLoad(entry) || hasMetricValue(set?.weight);
+  return Boolean(hasLoad && hasMetricValue(set?.reps) && hasMetricValue(set?.rpe));
+}
+
+function hasCompleteStrengthSet(set, entry = {}) {
+  if (isUnilateralSet(set, entry)) {
+    return hasCompleteStrengthSide(set?.left, entry) && hasCompleteStrengthSide(set?.right, entry);
+  }
+  return hasCompleteStrengthSide(set, entry);
+}
+
+function hasTouchedStrengthSide(set) {
   return Boolean(
     hasMetricValue(set?.weight) ||
     hasMetricValue(set?.reps) ||
     hasMetricValue(set?.rpe),
   );
+}
+
+function hasTouchedStrengthSet(set, entry = {}) {
+  if (isUnilateralSet(set, entry)) {
+    return hasTouchedStrengthSide(set?.left) || hasTouchedStrengthSide(set?.right);
+  }
+  return hasTouchedStrengthSide(set);
 }
 
 function hasCompleteMetricAttempt(attempt, kind = "other") {
@@ -2891,7 +3070,7 @@ function getCompletion(workout) {
   const total = entries.reduce((sum, entry) => sum + (isCardioEntry(entry) ? getMetricAttempts(entry).length : (entry.sets || []).length), 0);
   const done = entries.reduce((sum, entry) => {
     if (isCardioEntry(entry)) return sum + getMetricAttempts(entry).filter((attempt) => hasCompleteMetricAttempt(attempt, entry.kind)).length;
-    return sum + (entry.sets || []).filter(hasCompleteStrengthSet).length;
+    return sum + (entry.sets || []).filter((set) => hasCompleteStrengthSet(set, entry)).length;
   }, 0);
   return { done, total, percent: total ? Math.round((done / total) * 100) : 0 };
 }
@@ -2918,7 +3097,7 @@ function countFilledWorkoutItems(workout) {
       return;
     }
 
-    count += (entry.sets || []).filter(hasTouchedStrengthSet).length;
+    count += (entry.sets || []).filter((set) => hasTouchedStrengthSet(set, entry)).length;
   });
 
   return count;
@@ -2929,11 +3108,14 @@ function getWorkoutVolume(workout) {
   return getAllWorkoutEntries(workout, session).reduce((sum, entry) => {
     if (isCardioEntry(entry)) return sum;
     return sum + (entry.sets || []).reduce((setSum, set) => {
-      const weight = parseFloat(String(set.weight).replace(",", "."));
-      const reps = parseFloat(String(set.reps).replace(",", "."));
-      if (Number.isNaN(weight) || Number.isNaN(reps)) return setSum;
-      if (!hasCompleteStrengthSet(set)) return setSum;
-      return setSum + weight * reps;
+      if (!hasCompleteStrengthSet(set, entry)) return setSum;
+      const sides = isUnilateralSet(set, entry) ? [set.left, set.right] : [set];
+      return setSum + sides.reduce((sideSum, side) => {
+        const load = getStrengthLoad(side, entry);
+        const reps = parseNumber(side?.reps);
+        if (!Number.isFinite(load) || !Number.isFinite(reps)) return sideSum;
+        return sideSum + load * reps;
+      }, 0);
     }, 0);
   }, 0);
 }
@@ -2957,7 +3139,7 @@ function hasLoggedEntry(entry) {
 
   return Boolean(
     String(entry.note || "").trim() ||
-    (entry.sets || []).some(hasTouchedStrengthSet),
+    (entry.sets || []).some((set) => hasTouchedStrengthSet(set, entry)),
   );
 }
 
@@ -3490,12 +3672,12 @@ function matchesChartFilter(exercise, group, filter = "all") {
 
 function getExerciseFirstSetE1rm(entry) {
   const firstSet = entry?.sets?.[0];
-  return firstSet ? estimateOneRepMax(firstSet) : null;
+  return firstSet ? estimateOneRepMax(firstSet, entry) : null;
 }
 
 function getExerciseFirstSetSummary(entry) {
   const firstSet = entry?.sets?.[0];
-  return firstSet && estimateOneRepMax(firstSet) !== null ? formatSetSummary(firstSet) : "Geen eerste set";
+  return firstSet && estimateOneRepMax(firstSet, entry) !== null ? formatSetSummary(firstSet, entry) : "Geen eerste set";
 }
 
 function getExerciseSetGainScore(entry) {
@@ -3509,7 +3691,7 @@ function getExerciseSetGainScore(entry) {
 function getScoredStrengthSets(entry) {
   if (!entry) return [];
   return (entry.sets || [])
-    .map((set) => ({ set, score: estimateOneRepMax(set) }))
+    .map((set) => ({ set, score: estimateOneRepMax(set, entry) }))
     .filter((item) => item.score !== null);
 }
 
@@ -3533,9 +3715,18 @@ function normalizeWeights(weights) {
   return weights.map((weight) => weight / total);
 }
 
-function estimateOneRepMax(set) {
-  if (!hasCompleteStrengthSet(set)) return null;
-  const weight = parseNumber(set.weight);
+function estimateOneRepMax(set, entry = {}) {
+  if (!hasCompleteStrengthSet(set, entry)) return null;
+  if (isUnilateralSet(set, entry)) {
+    const sideEntry = { ...entry, unilateral: false };
+    const sideScores = [set.left, set.right]
+      .map((side) => estimateOneRepMax(side, sideEntry))
+      .filter((score) => score !== null);
+    if (sideScores.length !== 2) return null;
+    return sideScores.reduce((sum, score) => sum + score, 0) / sideScores.length;
+  }
+
+  const weight = getStrengthLoad(set, entry);
   const reps = parseNumber(set.reps);
   if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) return null;
 
