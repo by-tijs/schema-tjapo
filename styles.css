@@ -205,7 +205,7 @@ body.has-rest-timer .app-shell {
   bottom: calc(var(--nav-bottom) + var(--nav-height) + 8px);
   z-index: 19;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: 36px 1px minmax(42px, 1fr) max-content minmax(42px, 1fr) 1px 36px;
   min-height: 46px;
   overflow: hidden;
   isolation: isolate;
@@ -236,8 +236,9 @@ body.has-rest-timer .app-shell {
 }
 
 .rest-timer-adjust,
-.rest-timer-dismiss {
+.rest-timer-control {
   min-width: 0;
+  min-height: 44px;
   border: 0;
   background: transparent;
   display: inline-flex;
@@ -252,6 +253,12 @@ body.has-rest-timer .app-shell {
   min-width: 3.8rem;
   place-items: center;
   padding: 0;
+}
+
+.rest-timer-divider {
+  width: 1px;
+  height: 22px;
+  background: var(--line);
 }
 
 .rest-timer-readout strong {
@@ -276,26 +283,19 @@ body.has-rest-timer .app-shell {
 
 .rest-timer-subtract {
   justify-content: flex-start;
-  padding-left: 14px;
 }
 
 .rest-timer-add {
   color: var(--text);
   justify-content: flex-end;
-  padding-right: 42px;
 }
 
-.rest-timer-dismiss {
+.rest-timer-control {
   color: var(--muted);
-  height: 32px;
-  position: absolute;
-  right: 4px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 32px;
+  width: 36px;
 }
 
-.rest-timer-dismiss .lucide {
+.rest-timer-control .lucide {
   width: 16px;
   height: 16px;
 }

@@ -183,7 +183,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "129";
+const APP_VERSION = "130";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -381,6 +381,7 @@ function bindElements() {
   els.confirmActionLabel = document.getElementById("confirm-action-label");
   els.restTimer = document.getElementById("rest-timer");
   els.restTimerValue = document.getElementById("rest-timer-value");
+  els.restTimerPause = document.getElementById("rest-timer-pause");
   els.restAlarm = document.getElementById("rest-alarm");
   els.toast = document.getElementById("toast");
 }
@@ -1400,6 +1401,7 @@ function runAction(trigger) {
   if (action === "edit-setup") editSetup(trigger);
   if (action === "edit-exercise-name") editProgramExerciseName(trigger);
   if (action === "edit-name") editActivityName(trigger);
+  if (action === "rest-timer-toggle-pause") toggleRestTimerPause();
   if (action === "rest-timer-subtract") addRestTimerSeconds(-30);
   if (action === "rest-timer-add") addRestTimerSeconds(30);
   if (action === "rest-timer-dismiss") stopRestTimer();
@@ -1682,6 +1684,24 @@ function addRestTimerSeconds(seconds) {
   renderRestTimer();
 }
 
+function toggleRestTimerPause() {
+  if (!restTimer.active || restTimer.status === "done") return;
+
+  if (restTimer.status === "paused") {
+    restTimer.status = "running";
+    restTimer.endsAt = Date.now() + restTimer.remainingSeconds * 1000;
+    clearRestTimerInterval();
+    restTimer.interval = setInterval(tickRestTimer, REST_TIMER_TICK_MS);
+  } else {
+    restTimer.remainingSeconds = getRestTimerRemainingSeconds();
+    clearRestTimerInterval();
+    restTimer.status = "paused";
+    restTimer.endsAt = 0;
+  }
+
+  renderRestTimer();
+}
+
 function finishRestTimer() {
   clearRestTimerInterval();
   restTimer.active = false;
@@ -1757,6 +1777,18 @@ function renderRestTimer() {
 
   els.restTimer.style.setProperty("--rest-timer-progress", `${progress}%`);
   if (els.restTimerValue) els.restTimerValue.textContent = formatRestTimerSeconds(restTimer.remainingSeconds);
+  if (els.restTimerPause) {
+    const paused = restTimer.status === "paused";
+    const state = paused ? "paused" : "running";
+    if (els.restTimerPause.dataset.state !== state) {
+      els.restTimerPause.dataset.state = state;
+      els.restTimerPause.setAttribute("aria-label", paused ? "Hervat rusttimer" : "Pauzeer rusttimer");
+      els.restTimerPause.setAttribute("title", paused ? "Hervat rusttimer" : "Pauzeer rusttimer");
+      els.restTimerPause.setAttribute("aria-pressed", String(paused));
+      els.restTimerPause.innerHTML = `<i data-lucide="${paused ? "play" : "pause"}"></i>`;
+      refreshIcons();
+    }
+  }
 }
 
 function formatRestTimerSeconds(seconds) {
