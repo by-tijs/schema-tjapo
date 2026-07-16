@@ -143,12 +143,11 @@ const RUN_5K_METRIC = "run:5k-estimate";
 const RUN_PACE_METRIC = "run:pace";
 const RUN_DISTANCE_METRIC = "run:distance";
 const RUN_DURATION_METRIC = "run:duration";
-const RUN_SCORE_METRIC = "run:score";
 const RUN_INTENSITY_METRIC = "run:intensity";
 const RUN_TARGET_DISTANCE_KM = 5;
 const RUN_RIEGEL_EXPONENT = 1.06;
-const RUN_INTENSITY_SECOND_FACTOR = 0.022;
-const RUN_MIN_EFFORT_FACTOR = 0.78;
+const MIN_RUN_DISTANCE_KM_FOR_5K_ESTIMATE = 2;
+const MIN_RUN_INTENSITY_FOR_5K_ESTIMATE = 8;
 const STATS_RANGE_DAYS = [30, 90, 365];
 const DEFAULT_STATS_RANGE_DAYS = 90;
 const CHART_FILTERS = {
@@ -172,13 +171,14 @@ const CHART_FILTERS = {
 };
 const MAX_EFFECTIVE_REPS_FOR_E1RM = 50;
 const MAX_RIR_FROM_RPE = 5;
+const MIN_RPE_FOR_E1RM = 6;
 const TAIL_SET_WEIGHT_DECAY = 0.67;
 const DEFAULT_BODYWEIGHT_KG = 94;
 const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "125";
+const APP_VERSION = "126";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -234,6 +234,7 @@ const historyCache = {
   activityHistory: new Map(),
   latestActivity: new Map(),
   entryActivities: new Map(),
+  strengthIndexPoints: new Map(),
   historyProgressSummaries: null,
 };
 const cloudSync = {
@@ -296,9 +297,9 @@ function setProgramExerciseName(exerciseId, value) {
     state.exerciseNames[exerciseId] = nextName;
   }
 
-  const previousMetric = `exercise:${normalizeExerciseName(previousName)}`;
+  const previousMetric = makeExerciseMetricValue(previousName, exercise.setup);
   if (state.chartMetric === previousMetric) {
-    state.chartMetric = `exercise:${normalizeExerciseName(getProgramExerciseName(exercise))}`;
+    state.chartMetric = makeExerciseMetricValue(getProgramExerciseName(exercise), exercise.setup);
   }
 
   historyCache.ref = null;
@@ -464,6 +465,7 @@ function getHistoryCache() {
     historyCache.activityHistory.clear();
     historyCache.latestActivity.clear();
     historyCache.entryActivities.clear();
+    historyCache.strengthIndexPoints.clear();
     historyCache.historyProgressSummaries = null;
   }
   return historyCache;
@@ -883,7 +885,7 @@ function renderExerciseCard(exercise, workout, index, options = {}) {
   const isEditingName = uiState.editingName === cardKey;
   const isEditingSetup = isOpen && uiState.editingSetup === cardKey;
   const exerciseName = getProgramExerciseName(exercise);
-  const target = { name: exerciseName, kind };
+  const target = { name: exerciseName, kind, setup: entry.setup };
   const previous = isOpen ? getActivityHistory(target) : [];
   const placeholderSource = isOpen ? getLatestActivitySnapshot(target) : null;
   return `
@@ -2565,6 +2567,27 @@ function normalizeSetupLabel(value) {
   return String(value || "").trim().replace(/^hoogte\s+/i, "");
 }
 
+function getStrengthActivityKey(name, entryOrSetup = "") {
+  const setup = typeof entryOrSetup === "object" ? entryOrSetup?.setup : entryOrSetup;
+  const normalizedSetup = normalizeExerciseName(normalizeSetupLabel(setup));
+  return `${normalizeExerciseName(name)}::${normalizedSetup}`;
+}
+
+function getStrengthActivityLabel(name, entryOrSetup = "") {
+  const setup = typeof entryOrSetup === "object" ? entryOrSetup?.setup : entryOrSetup;
+  const normalizedSetup = normalizeSetupLabel(setup);
+  return normalizedSetup ? `${name} - ${normalizedSetup}` : name;
+}
+
+function makeExerciseMetricValue(name, entryOrSetup = "") {
+  return `exercise:${getStrengthActivityKey(name, entryOrSetup)}`;
+}
+
+function getActivityComparisonKey(target) {
+  if (target?.kind && isMetricKind(target.kind)) return normalizeExerciseName(target.name);
+  return getStrengthActivityKey(target?.name, target?.setup ?? target?.entry?.setup);
+}
+
 function isMetricKind(kind) {
   return ["run", "cardio", "other"].includes(kind);
 }
@@ -2628,6 +2651,7 @@ function getActivityTargetFromRef(ref, entry) {
     return {
       name: entry.name || "Extra",
       kind: getEntryKind(entry),
+      setup: entry.setup || "",
     };
   }
 
@@ -2636,14 +2660,15 @@ function getActivityTargetFromRef(ref, entry) {
   return {
     name: getProgramExerciseName(exercise) || entry.name || ref.exerciseId,
     kind: getEntryKind(entry),
+    setup: entry.setup || exercise?.setup || "",
   };
 }
 
 function getActivityHistory(target, limit = 8) {
-  const targetName = normalizeExerciseName(target.name);
   const targetKind = target.kind || "strength";
+  const targetKey = getActivityComparisonKey(target);
   const cache = getHistoryCache();
-  const cacheKey = getHistoryCacheKey(["activity", targetKind, targetName, limit]);
+  const cacheKey = getHistoryCacheKey(["activity", targetKind, targetKey, limit]);
   if (cache.activityHistory.has(cacheKey)) return cache.activityHistory.get(cacheKey);
 
   const rows = [];
@@ -2652,7 +2677,7 @@ function getActivityHistory(target, limit = 8) {
     .forEach((historyEntry) => {
       getHistoryActivityEntries(historyEntry).forEach((candidate) => {
         if (candidate.kind !== targetKind) return;
-        if (normalizeExerciseName(candidate.name) !== targetName) return;
+        if (getActivityComparisonKey(candidate) !== targetKey) return;
 
         const snapshot = makeHistorySnapshot(candidate, historyEntry);
         if (snapshot) rows.push(snapshot);
@@ -2665,15 +2690,15 @@ function getActivityHistory(target, limit = 8) {
 }
 
 function getLatestActivitySnapshot(target) {
-  const targetName = normalizeExerciseName(target.name);
   const targetKind = target.kind || "strength";
+  const targetKey = getActivityComparisonKey(target);
   const cache = getHistoryCache();
-  const cacheKey = getHistoryCacheKey(["latest", targetKind, targetName]);
+  const cacheKey = getHistoryCacheKey(["latest", targetKind, targetKey]);
   if (cache.latestActivity.has(cacheKey)) return cache.latestActivity.get(cacheKey);
 
   for (const historyEntry of getSortedHistoryDesc()) {
     const match = getHistoryActivityEntries(historyEntry).find((candidate) =>
-      candidate.kind === targetKind && normalizeExerciseName(candidate.name) === targetName
+      candidate.kind === targetKind && getActivityComparisonKey(candidate) === targetKey
     );
     if (!match) continue;
 
@@ -3196,7 +3221,7 @@ function getHistoryProgressSummaries() {
   getSortedHistoryAsc().forEach((historyEntry) => {
     if (!historyEntry?.workout || historyEntry.sessionId === "overig") return;
 
-    const changes = [];
+    const changeFactors = [];
     const updates = [];
     getHistoryActivityEntries(historyEntry)
       .filter((candidate) => candidate.kind === "strength")
@@ -3204,16 +3229,16 @@ function getHistoryProgressSummaries() {
         const score = getExerciseSetGainScore(candidate.entry);
         if (score === null) return;
 
-        const name = normalizeExerciseName(candidate.name);
-        const previous = latestScores.get(name);
-        if (previous > 0) changes.push(((score - previous) / previous) * 100);
-        updates.push([name, score]);
+        const activityKey = getStrengthActivityKey(candidate.name, candidate.entry);
+        const previous = latestScores.get(activityKey);
+        if (previous > 0 && score > 0) changeFactors.push(score / previous);
+        updates.push([activityKey, score]);
       });
 
-    updates.forEach(([name, score]) => latestScores.set(name, score));
+    updates.forEach(([activityKey, score]) => latestScores.set(activityKey, score));
 
-    if (!changes.length) return;
-    const average = changes.reduce((sum, change) => sum + change, 0) / changes.length;
+    if (!changeFactors.length) return;
+    const average = (getGeometricMean(changeFactors) - 1) * 100;
     const className = average > 0.15
       ? "history-summary-progress is-up"
       : average < -0.15
@@ -3313,14 +3338,16 @@ function getStrengthRecords(group, filter, rangeDays = getStatsRangeDays()) {
     session.exercises
       .filter((exercise) => matchesChartFilter(exercise, group, filter))
       .forEach((exercise) => {
-        const name = getProgramExerciseName(exercise);
         const entry = workout.exercises?.[exercise.id];
         const score = getExerciseFirstSetE1rm(entry);
         if (score === null) return;
-        const current = records.get(name);
+        const name = entry?.name || getProgramExerciseName(exercise);
+        const activityKey = getStrengthActivityKey(name, entry?.setup ?? exercise.setup);
+        const current = records.get(activityKey);
         if (!current || score > current.score) {
-          records.set(name, {
+          records.set(activityKey, {
             name,
+            setup: entry?.setup ?? exercise.setup,
             score,
             summary: getExerciseFirstSetSummary(entry),
             date: historyEntry.date,
@@ -3328,7 +3355,20 @@ function getStrengthRecords(group, filter, rangeDays = getStatsRangeDays()) {
         }
       });
   });
-  return [...records.values()].sort((a, b) => b.score - a.score);
+  const values = [...records.values()];
+  const duplicateNames = values.reduce((counts, record) => {
+    const nameKey = normalizeExerciseName(record.name);
+    counts.set(nameKey, (counts.get(nameKey) || 0) + 1);
+    return counts;
+  }, new Map());
+  return values
+    .map((record) => ({
+      ...record,
+      name: duplicateNames.get(normalizeExerciseName(record.name)) > 1
+        ? getStrengthActivityLabel(record.name, record.setup)
+        : record.name,
+    }))
+    .sort((a, b) => b.score - a.score);
 }
 
 function getRunningRecords(rangeDays = getStatsRangeDays()) {
@@ -3337,28 +3377,16 @@ function getRunningRecords(rangeDays = getStatsRangeDays()) {
 
   const records = [];
   const byLatest = [...runs].sort((a, b) => `${b.date}${b.completedAt}`.localeCompare(`${a.date}${a.completedAt}`));
-  const scoreRows = runs.filter((run) => Number.isFinite(run.score));
-  const paceRows = runs.filter((run) => Number.isFinite(run.paceSeconds));
   const distanceRows = runs.filter((run) => Number.isFinite(run.distance));
-  const durationRows = runs.filter((run) => Number.isFinite(run.durationSeconds));
+  const fiveKRows = runs.filter((run) => Number.isFinite(run.estimatedFiveKSeconds));
 
-  const bestScore = [...scoreRows].sort((a, b) => b.score - a.score)[0];
-  if (bestScore) {
+  const bestFiveK = [...fiveKRows].sort((a, b) => a.estimatedFiveKSeconds - b.estimatedFiveKSeconds)[0];
+  if (bestFiveK) {
     records.push({
       type: "run",
-      name: "Beste run score",
-      meta: formatRunRecordMeta(bestScore),
-      value: formatNumber(bestScore.score),
-    });
-  }
-
-  const bestPace = [...paceRows].sort((a, b) => a.paceSeconds - b.paceSeconds)[0];
-  if (bestPace) {
-    records.push({
-      type: "run",
-      name: "Beste pace",
-      meta: `${formatNumber(bestPace.distance)} km - ${formatDate(bestPace.date)}`,
-      value: `${formatPace(bestPace.paceSeconds)}/km`,
+      name: "Beste 5K schatting",
+      meta: formatRunRecordMeta(bestFiveK),
+      value: formatRaceTime(bestFiveK.estimatedFiveKSeconds),
     });
   }
 
@@ -3371,18 +3399,6 @@ function getRunningRecords(rangeDays = getStatsRangeDays()) {
         .filter(Boolean)
         .join(" - "),
       value: `${formatNumber(longest.distance)} km`,
-    });
-  }
-
-  const longestDuration = [...durationRows].sort((a, b) => b.durationSeconds - a.durationSeconds)[0];
-  if (longestDuration) {
-    records.push({
-      type: "run",
-      name: "Langste tijd",
-      meta: [Number.isFinite(longestDuration.distance) && `${formatNumber(longestDuration.distance)} km`, formatDate(longestDuration.date)]
-        .filter(Boolean)
-        .join(" - "),
-      value: formatMetricDuration(longestDuration.durationSeconds),
     });
   }
 
@@ -3472,20 +3488,30 @@ function getChartMetrics(group, filter = "all") {
     return [{ value: RUN_5K_METRIC, label: "5K schatting" }];
   }
 
-  const seen = new Set();
-  const exerciseMetrics = sessions
+  const metricsByKey = new Map();
+  sessions
     .filter((session) => session.group === group)
     .flatMap((session) => session.exercises)
     .filter((exercise) => matchesChartFilter(exercise, group, filter))
-    .map((exercise) => ({
-      value: `exercise:${normalizeExerciseName(getProgramExerciseName(exercise))}`,
-      label: getProgramExerciseName(exercise),
+    .forEach((exercise) => {
+      const name = getProgramExerciseName(exercise);
+      const activityKey = getStrengthActivityKey(name, exercise.setup);
+      if (!metricsByKey.has(activityKey)) metricsByKey.set(activityKey, { name, setup: exercise.setup, activityKey });
+    });
+
+  const duplicateNames = new Map();
+  metricsByKey.forEach((metric) => {
+    const nameKey = normalizeExerciseName(metric.name);
+    duplicateNames.set(nameKey, (duplicateNames.get(nameKey) || 0) + 1);
+  });
+
+  const exerciseMetrics = [...metricsByKey.values()]
+    .map((metric) => ({
+      value: `exercise:${metric.activityKey}`,
+      label: duplicateNames.get(normalizeExerciseName(metric.name)) > 1
+        ? getStrengthActivityLabel(metric.name, metric.setup)
+        : metric.name,
     }))
-    .filter((metric) => {
-      if (seen.has(metric.value)) return false;
-      seen.add(metric.value);
-      return true;
-    })
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const filterLabel = getChartFilters(group).find((item) => item.value === filter)?.label;
@@ -3495,13 +3521,12 @@ function getChartMetrics(group, filter = "all") {
 
 function getTrendPoints(group, metric, filter = "all", rangeDays = getStatsRangeDays()) {
   if (group === "Running") return getRunTrendPoints(metric, rangeDays);
+  if (metric === STRENGTH_INDEX_METRIC) return getStrengthIndexTrendPoints(group, filter, rangeDays);
 
-  const rawPoints = getStatsHistoryAsc(rangeDays)
+  return getStatsHistoryAsc(rangeDays)
     .filter((entry) => entry.sessionGroup === group && entry.workout)
     .map((entry) => {
-      const value = metric === STRENGTH_INDEX_METRIC
-        ? getWorkoutStrengthScore(entry, filter)
-        : getExerciseTrendValue(entry, metric.replace("exercise:", ""));
+      const value = getExerciseTrendValue(entry, metric.replace("exercise:", ""));
       if (value === null) return null;
       return {
         date: entry.date,
@@ -3510,18 +3535,61 @@ function getTrendPoints(group, metric, filter = "all", rangeDays = getStatsRange
       };
     })
     .filter(Boolean);
-
-  return metric === STRENGTH_INDEX_METRIC ? normalizeTrendPointsToIndex(rawPoints) : rawPoints;
 }
 
-function normalizeTrendPointsToIndex(points) {
-  if (!points.length) return [];
-  const baseline = points[0].value;
-  if (!baseline) return [];
-  return points.map((point) => ({
-    ...point,
-    value: (point.value / baseline) * 100,
-  }));
+function getStrengthIndexTrendPoints(group, filter = "all", rangeDays = getStatsRangeDays()) {
+  const cache = getHistoryCache();
+  const days = getStatsRangeDays(rangeDays);
+  const cacheKey = getHistoryCacheKey(["strength-index", group, filter, days]);
+  if (cache.strengthIndexPoints.has(cacheKey)) return cache.strengthIndexPoints.get(cacheKey);
+
+  const baselines = new Map();
+  const latestFactors = new Map();
+  const points = [];
+
+  getSortedHistoryAsc().forEach((historyEntry) => {
+    const measurements = getStrengthIndexMeasurements(historyEntry, group, filter);
+    if (!measurements.length) return;
+
+    measurements.forEach(({ activityKey, score }) => {
+      if (!baselines.has(activityKey)) baselines.set(activityKey, score);
+      const baseline = baselines.get(activityKey);
+      if (baseline > 0) latestFactors.set(activityKey, score / baseline);
+    });
+
+    if (!isHistoryEntryInStatsRange(historyEntry, days)) return;
+    const factor = getGeometricMean([...latestFactors.values()]);
+    if (factor === null) return;
+    points.push({
+      date: historyEntry.date,
+      label: historyEntry.sessionLabel,
+      value: factor * 100,
+    });
+  });
+
+  cache.strengthIndexPoints.set(cacheKey, points);
+  return points;
+}
+
+function getStrengthIndexMeasurements(historyEntry, group, filter = "all") {
+  const session = findSession(historyEntry.sessionId);
+  const workout = historyEntry.workout;
+  if (!session || !workout || session.group !== group) return [];
+
+  const measurements = new Map();
+  session.exercises.forEach((exercise) => {
+    if (!matchesChartFilter(exercise, group, filter)) return;
+    const entry = workout.exercises?.[exercise.id];
+    const score = getExerciseFirstSetE1rm(entry);
+    if (score === null) return;
+
+    const name = entry?.name || getProgramExerciseName(exercise);
+    const activityKey = getStrengthActivityKey(name, entry?.setup ?? exercise.setup);
+    const previous = measurements.get(activityKey);
+    if (!previous || score > previous.score) measurements.set(activityKey, { activityKey, score });
+  });
+
+  return [...measurements.values()];
 }
 
 function getRunTrendPoints(metric, rangeDays = getStatsRangeDays()) {
@@ -3541,22 +3609,6 @@ function getRunTrendPoints(metric, rangeDays = getStatsRangeDays()) {
       .filter(Boolean));
 }
 
-function getWorkoutStrengthScore(historyEntry, filter = "all") {
-  const session = findSession(historyEntry.sessionId);
-  const workout = historyEntry.workout;
-  if (!session || !workout) return null;
-
-  const scores = [];
-  session.exercises.forEach((exercise) => {
-    if (!matchesChartFilter(exercise, session.group, filter)) return;
-    const score = getExerciseFirstSetE1rm(workout.exercises?.[exercise.id]);
-    if (score !== null) scores.push(score);
-  });
-
-  if (!scores.length) return null;
-  return scores.reduce((sum, score) => sum + score, 0) / scores.length;
-}
-
 function getExerciseTrendValue(historyEntry, exerciseKey) {
   const session = findSession(historyEntry.sessionId);
   const workout = historyEntry.workout;
@@ -3564,8 +3616,10 @@ function getExerciseTrendValue(historyEntry, exerciseKey) {
 
   let best = null;
   session.exercises.forEach((exercise) => {
-    if (normalizeExerciseName(getProgramExerciseName(exercise)) !== exerciseKey) return;
-    const value = getExerciseFirstSetE1rm(workout.exercises?.[exercise.id]);
+    const entry = workout.exercises?.[exercise.id];
+    const name = entry?.name || getProgramExerciseName(exercise);
+    if (getStrengthActivityKey(name, entry?.setup ?? exercise.setup) !== exerciseKey) return;
+    const value = getExerciseFirstSetE1rm(entry);
     if (value !== null && (best === null || value > best)) best = value;
   });
   return best;
@@ -3576,7 +3630,6 @@ function getRunMetricValue(metrics, metric) {
   const durationSeconds = parseDurationToSeconds(metrics.duration);
   const intensity = parseRunIntensity(metrics.intensity);
   if (metric === RUN_5K_METRIC) return getEstimatedFiveKSeconds(metrics);
-  if (metric === RUN_SCORE_METRIC) return getRunScore(metrics);
   if (metric === RUN_DISTANCE_METRIC) return Number.isFinite(distance) && distance > 0 ? distance : null;
   if (metric === RUN_DURATION_METRIC) return durationSeconds ? durationSeconds / 60 : null;
   if (metric === RUN_INTENSITY_METRIC) return Number.isFinite(intensity) ? intensity : null;
@@ -3590,18 +3643,16 @@ function getRunMetricValue(metrics, metric) {
 function getEstimatedFiveKSeconds(metrics = {}) {
   const distance = parseNumber(metrics.distance);
   const durationSeconds = parseDurationToSeconds(metrics.duration);
-  if (!Number.isFinite(distance) || distance <= 0 || !durationSeconds) return null;
-
   const intensity = parseRunIntensity(metrics.intensity);
-  const effortFactor = getRunEffortFactor(intensity);
-  const hardEffortSeconds = durationSeconds * effortFactor;
-  return hardEffortSeconds * Math.pow(RUN_TARGET_DISTANCE_KM / distance, RUN_RIEGEL_EXPONENT);
-}
+  if (
+    !Number.isFinite(distance) ||
+    distance < MIN_RUN_DISTANCE_KM_FOR_5K_ESTIMATE ||
+    !durationSeconds ||
+    !Number.isFinite(intensity) ||
+    intensity < MIN_RUN_INTENSITY_FOR_5K_ESTIMATE
+  ) return null;
 
-function getRunEffortFactor(intensity) {
-  if (!Number.isFinite(intensity)) return 1;
-  const effortGap = Math.max(0, 10 - Math.max(0, Math.min(10, intensity)));
-  return Math.max(RUN_MIN_EFFORT_FACTOR, 1 - effortGap * RUN_INTENSITY_SECOND_FACTOR);
+  return durationSeconds * Math.pow(RUN_TARGET_DISTANCE_KM / distance, RUN_RIEGEL_EXPONENT);
 }
 
 function getRunHistoryRows(rangeDays = getStatsRangeDays()) {
@@ -3620,22 +3671,9 @@ function getRunHistoryRows(rangeDays = getStatsRangeDays()) {
         durationSeconds: durationSeconds || null,
         intensity: Number.isFinite(intensity) ? intensity : null,
         paceSeconds: Number.isFinite(distance) && distance > 0 && durationSeconds ? durationSeconds / distance : null,
-        score: getRunScore(metrics),
+        estimatedFiveKSeconds: getEstimatedFiveKSeconds(metrics),
       };
     })));
-}
-
-function getRunScore(metrics) {
-  const distance = parseNumber(metrics.distance);
-  const durationSeconds = parseDurationToSeconds(metrics.duration);
-  if (!Number.isFinite(distance) || distance <= 0 || !durationSeconds) return null;
-
-  const speedKmh = distance / (durationSeconds / 3600);
-  const distanceFactor = 1 + Math.log10(Math.max(1, distance)) / 4;
-  const intensity = parseRunIntensity(metrics.intensity);
-  const reserve = Number.isFinite(intensity) ? 10 - intensity : 0;
-  const intensityFactor = 1 + Math.max(0, reserve) * 0.025;
-  return speedKmh * distanceFactor * intensityFactor;
 }
 
 function parseRunIntensity(value) {
@@ -3682,16 +3720,18 @@ function getExerciseFirstSetSummary(entry) {
 
 function getExerciseSetGainScore(entry) {
   const scoredSets = getScoredStrengthSets(entry);
-  if (!scoredSets.length) return null;
+  const weights = getSetPositionWeights((entry?.sets || []).length);
+  if (!scoredSets.length || !weights.length) return null;
 
-  const weights = getSetPositionWeights(scoredSets.length);
-  return scoredSets.reduce((sum, item, index) => sum + item.score * weights[index], 0);
+  const totalWeight = scoredSets.reduce((sum, item) => sum + (weights[item.index] || 0), 0);
+  if (!totalWeight) return null;
+  return scoredSets.reduce((sum, item) => sum + item.score * (weights[item.index] || 0), 0) / totalWeight;
 }
 
 function getScoredStrengthSets(entry) {
   if (!entry) return [];
   return (entry.sets || [])
-    .map((set) => ({ set, score: estimateOneRepMax(set, entry) }))
+    .map((set, index) => ({ set, index, score: estimateOneRepMax(set, entry) }))
     .filter((item) => item.score !== null);
 }
 
@@ -3715,6 +3755,12 @@ function normalizeWeights(weights) {
   return weights.map((weight) => weight / total);
 }
 
+function getGeometricMean(values) {
+  const valid = values.filter((value) => Number.isFinite(value) && value > 0);
+  if (!valid.length) return null;
+  return Math.exp(valid.reduce((sum, value) => sum + Math.log(value), 0) / valid.length);
+}
+
 function estimateOneRepMax(set, entry = {}) {
   if (!hasCompleteStrengthSet(set, entry)) return null;
   if (isUnilateralSet(set, entry)) {
@@ -3728,7 +3774,15 @@ function estimateOneRepMax(set, entry = {}) {
 
   const weight = getStrengthLoad(set, entry);
   const reps = parseNumber(set.reps);
-  if (!Number.isFinite(weight) || !Number.isFinite(reps) || weight <= 0 || reps <= 0) return null;
+  const rpe = parseNumber(set.rpe);
+  if (
+    !Number.isFinite(weight) ||
+    !Number.isFinite(reps) ||
+    !Number.isFinite(rpe) ||
+    weight <= 0 ||
+    reps <= 0 ||
+    rpe < MIN_RPE_FOR_E1RM
+  ) return null;
 
   const effectiveReps = getEffectiveRepsForSet(set);
   return getHybridOneRepMax(weight, effectiveReps);
@@ -3787,7 +3841,6 @@ function formatRaceTime(seconds) {
 
 function formatChartValue(value, metric) {
   if (metric === RUN_5K_METRIC) return formatRaceTime(value);
-  if (metric === RUN_SCORE_METRIC) return `${formatNumber(value)} score`;
   if (metric === RUN_PACE_METRIC) return `${formatPace(value)}/km`;
   if (metric === RUN_DISTANCE_METRIC) return `${formatNumber(value)} km`;
   if (metric === RUN_DURATION_METRIC) return `${formatNumber(value)} min`;
