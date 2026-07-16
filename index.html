@@ -14,10 +14,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=127">
+  <link rel="stylesheet" href="styles.css?v=128">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=127" defer></script>
-  <script src="app.js?v=127" defer></script>
+  <script src="firebase-config.js?v=128" defer></script>
+  <script src="app.js?v=128" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -188,14 +188,14 @@
   </div>
 
   <div id="rest-timer" class="rest-timer" hidden aria-live="polite">
-    <button id="rest-timer-toggle" class="rest-timer-toggle" type="button" data-action="rest-timer-toggle" aria-label="Pauzeer rusttimer" title="Pauzeer rusttimer">
-      <span id="rest-timer-toggle-icon" class="rest-timer-icon" data-icon="pause"><i data-lucide="pause"></i></span>
+    <button class="rest-timer-adjust rest-timer-subtract" type="button" data-action="rest-timer-subtract" aria-label="Haal 30 seconden van de rusttimer af" title="-30 seconden">
+      <i data-lucide="minus"></i>
+      <span>30</span>
     </button>
     <div class="rest-timer-readout">
-      <span id="rest-timer-label">Rust</span>
       <strong id="rest-timer-value">5:00</strong>
     </div>
-    <button class="rest-timer-add" type="button" data-action="rest-timer-add" aria-label="Voeg 30 seconden toe" title="Voeg 30 seconden toe">
+    <button class="rest-timer-adjust rest-timer-add" type="button" data-action="rest-timer-add" aria-label="Voeg 30 seconden toe" title="+30 seconden">
       <i data-lucide="plus"></i>
       <span>30</span>
     </button>

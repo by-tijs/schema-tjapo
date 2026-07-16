@@ -205,7 +205,7 @@ body.has-rest-timer .app-shell {
   bottom: calc(var(--nav-bottom) + var(--nav-height) + 8px);
   z-index: 19;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 52px 42px;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   min-height: 46px;
   overflow: hidden;
   isolation: isolate;
@@ -235,72 +235,69 @@ body.has-rest-timer .app-shell {
   background: rgba(215, 255, 99, 0.22);
 }
 
-.rest-timer-toggle,
-.rest-timer-add,
+.rest-timer-adjust,
 .rest-timer-dismiss {
   min-width: 0;
   border: 0;
   background: transparent;
-  color: var(--text-dim);
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
-.rest-timer-toggle,
-.rest-timer-add {
-  border-right: 1px solid var(--line);
-}
-
-.rest-timer-toggle .lucide,
-.rest-timer-dismiss .lucide {
-  width: 16px;
-  height: 16px;
-}
-
 .rest-timer-readout {
-  min-width: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 0 12px;
-}
-
-.rest-timer-readout span {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-dim);
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-width: 3.8rem;
+  place-items: center;
+  padding: 0;
 }
 
 .rest-timer-readout strong {
-  flex: 0 0 auto;
   color: var(--text);
   font-variant-numeric: tabular-nums;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 800;
 }
 
-.rest-timer-add {
-  gap: 2px;
-  color: var(--text);
-  font-size: 0.72rem;
+.rest-timer-adjust {
+  color: var(--text-dim);
+  gap: 3px;
+  font-size: 0.74rem;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
 
-.rest-timer-add .lucide {
+.rest-timer-adjust .lucide {
   width: 13px;
   height: 13px;
 }
 
+.rest-timer-subtract {
+  justify-content: flex-start;
+  padding-left: 14px;
+}
+
+.rest-timer-add {
+  color: var(--text);
+  justify-content: flex-end;
+  padding-right: 42px;
+}
+
 .rest-timer-dismiss {
   color: var(--muted);
+  height: 32px;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+}
+
+.rest-timer-dismiss .lucide {
+  width: 16px;
+  height: 16px;
 }
 
 main {

@@ -183,7 +183,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "127";
+const APP_VERSION = "128";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -259,7 +259,6 @@ const cloudSync = {
 const restTimer = {
   active: false,
   status: "idle",
-  label: "Rust",
   durationSeconds: 0,
   remainingSeconds: 0,
   endsAt: 0,
@@ -380,10 +379,7 @@ function bindElements() {
   els.confirmMessage = document.getElementById("confirm-message");
   els.confirmActionLabel = document.getElementById("confirm-action-label");
   els.restTimer = document.getElementById("rest-timer");
-  els.restTimerLabel = document.getElementById("rest-timer-label");
   els.restTimerValue = document.getElementById("rest-timer-value");
-  els.restTimerToggle = document.getElementById("rest-timer-toggle");
-  els.restTimerToggleIcon = document.getElementById("rest-timer-toggle-icon");
   els.toast = document.getElementById("toast");
 }
 
@@ -1402,7 +1398,7 @@ function runAction(trigger) {
   if (action === "edit-setup") editSetup(trigger);
   if (action === "edit-exercise-name") editProgramExerciseName(trigger);
   if (action === "edit-name") editActivityName(trigger);
-  if (action === "rest-timer-toggle") toggleRestTimer();
+  if (action === "rest-timer-subtract") addRestTimerSeconds(-30);
   if (action === "rest-timer-add") addRestTimerSeconds(30);
   if (action === "rest-timer-dismiss") stopRestTimer();
   if (action === "complete-session") completeSession();
@@ -1604,7 +1600,7 @@ function startSetRestTimer(entry, ref, setIndex) {
   const completionKey = getRestTimerCompletionKey(ref, setIndex, "set");
   if (restTimer.completionKeys.has(completionKey)) return;
   restTimer.completionKeys.add(completionKey);
-  startRestTimer(getEntryRestSeconds(entry), "Rust");
+  startRestTimer(getEntryRestSeconds(entry));
 }
 
 function startSideRestTimer(entry, ref, setIndex, side) {
@@ -1613,8 +1609,7 @@ function startSideRestTimer(entry, ref, setIndex, side) {
   if (restTimer.completionKeys.has(completionKey)) return;
   restTimer.completionKeys.add(completionKey);
 
-  const nextSide = side === "left" ? "R" : "L";
-  startRestTimer(REST_TIMER_SIDE_SECONDS, `${side === "left" ? "L" : "R"} -> ${nextSide}`);
+  startRestTimer(REST_TIMER_SIDE_SECONDS);
 }
 
 function getRestTimerCompletionKey(ref, setIndex, part) {
@@ -1637,13 +1632,12 @@ function isLikelyCompoundExercise(name) {
   return /(bench|pull\s?ups?|weighted dips|deadlift|sissy squats|shoulder press|(^|\s)row|incline db press|db press)/.test(name);
 }
 
-function startRestTimer(seconds, label = "Rust") {
+function startRestTimer(seconds) {
   const duration = Math.max(1, Math.round(Number(seconds) || REST_TIMER_ISOLATION_SECONDS));
   clearRestTimerInterval();
   clearTimeout(restTimer.hideTimeout);
   restTimer.active = true;
   restTimer.status = "running";
-  restTimer.label = label;
   restTimer.durationSeconds = duration;
   restTimer.remainingSeconds = duration;
   restTimer.endsAt = Date.now() + duration * 1000;
@@ -1669,33 +1663,18 @@ function getRestTimerRemainingSeconds() {
   return Math.max(0, Math.ceil((restTimer.endsAt - Date.now()) / 1000));
 }
 
-function toggleRestTimer() {
-  if (!restTimer.active || restTimer.status === "done") {
-    stopRestTimer();
-    return;
-  }
-
-  if (restTimer.status === "running") {
-    restTimer.remainingSeconds = Math.max(1, getRestTimerRemainingSeconds());
-    restTimer.status = "paused";
-    clearRestTimerInterval();
-    renderRestTimer();
-    return;
-  }
-
-  restTimer.status = "running";
-  restTimer.endsAt = Date.now() + Math.max(1, restTimer.remainingSeconds) * 1000;
-  restTimer.interval = setInterval(tickRestTimer, REST_TIMER_TICK_MS);
-  prepareRestTimerAudio();
-  renderRestTimer();
-}
-
 function addRestTimerSeconds(seconds) {
   if (!restTimer.active || restTimer.status === "done") return;
-  const extra = Math.max(1, Math.round(Number(seconds) || 0));
-  const remaining = Math.max(1, getRestTimerRemainingSeconds()) + extra;
+  const adjustment = Math.round(Number(seconds) || 0);
+  if (!adjustment) return;
+  const remaining = Math.max(0, getRestTimerRemainingSeconds() + adjustment);
+  if (remaining <= 0) {
+    finishRestTimer();
+    return;
+  }
+
   restTimer.remainingSeconds = remaining;
-  restTimer.durationSeconds += extra;
+  restTimer.durationSeconds = Math.max(remaining, restTimer.durationSeconds + adjustment);
   if (restTimer.status === "running") restTimer.endsAt = Date.now() + remaining * 1000;
   renderRestTimer();
 }
@@ -1703,7 +1682,6 @@ function addRestTimerSeconds(seconds) {
 function finishRestTimer() {
   clearRestTimerInterval();
   restTimer.status = "done";
-  restTimer.label = "Klaar";
   restTimer.remainingSeconds = 0;
   restTimer.endsAt = 0;
   renderRestTimer();
@@ -1718,7 +1696,6 @@ function stopRestTimer() {
   restTimer.hideTimeout = null;
   restTimer.active = false;
   restTimer.status = "idle";
-  restTimer.label = "Rust";
   restTimer.durationSeconds = 0;
   restTimer.remainingSeconds = 0;
   restTimer.endsAt = 0;
@@ -1738,29 +1715,12 @@ function renderRestTimer() {
   document.body.classList.toggle("has-rest-timer", visible);
   if (!visible) return;
 
-  const icon = restTimer.status === "running" ? "pause" : restTimer.status === "paused" ? "play" : "check";
-  if (els.restTimerToggleIcon?.dataset.icon !== icon) {
-    els.restTimerToggleIcon.dataset.icon = icon;
-    els.restTimerToggleIcon.innerHTML = `<i data-lucide="${icon}"></i>`;
-    refreshIcons();
-  }
-
   const progress = restTimer.durationSeconds
     ? Math.min(100, Math.max(0, ((restTimer.durationSeconds - restTimer.remainingSeconds) / restTimer.durationSeconds) * 100))
     : 0;
-  const toggleLabel = restTimer.status === "running"
-    ? "Pauzeer rusttimer"
-    : restTimer.status === "paused"
-      ? "Hervat rusttimer"
-      : "Sluit rusttimer";
 
   els.restTimer.style.setProperty("--rest-timer-progress", `${progress}%`);
-  if (els.restTimerLabel) els.restTimerLabel.textContent = restTimer.label;
   if (els.restTimerValue) els.restTimerValue.textContent = formatRestTimerSeconds(restTimer.remainingSeconds);
-  if (els.restTimerToggle) {
-    els.restTimerToggle.setAttribute("aria-label", toggleLabel);
-    els.restTimerToggle.setAttribute("title", toggleLabel);
-  }
 }
 
 function formatRestTimerSeconds(seconds) {
