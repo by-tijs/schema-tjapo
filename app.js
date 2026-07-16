@@ -186,7 +186,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "138";
+const APP_VERSION = "139";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -951,7 +951,7 @@ function renderExerciseCard(exercise, workout, index, options = {}) {
   const ref = { exerciseId: exercise.id };
   const cardKey = getRefKey(ref);
   const isOpen = uiState.expandedCards.has(cardKey);
-  const isEditingName = uiState.editingName === cardKey;
+  const isEditingName = isOpen && uiState.editingName === cardKey;
   const isEditingSetup = isOpen && uiState.editingSetup === cardKey;
   const exerciseName = getProgramExerciseName(exercise);
   const target = { name: exerciseName, kind, setup: entry.setup };
@@ -965,7 +965,7 @@ function renderExerciseCard(exercise, workout, index, options = {}) {
           ${isEditingName ? `
             <input class="activity-name-input" type="text" data-field="exercise-name" ${getRefAttrs(ref)} value="${escapeAttr(exerciseName)}" data-original-value="${escapeAttr(exerciseName)}" aria-label="Naam">
           ` : `
-            <button class="activity-name-display" type="button" data-action="edit-exercise-name" ${getRefAttrs(ref)}>${escapeHtml(exerciseName)}</button>
+            <button class="activity-name-display" type="button" data-action="${isOpen ? "edit-exercise-name" : "toggle-card"}" ${getRefAttrs(ref)}>${escapeHtml(exerciseName)}</button>
           `}
           ${renderExerciseSubtitle(summary, entry, ref, isOpen, isEditingSetup)}
         </div>
@@ -985,7 +985,7 @@ function renderCustomCard(item, index, options = {}) {
   const ref = { customIndex: index };
   const cardKey = getRefKey(ref);
   const isOpen = uiState.expandedCards.has(cardKey);
-  const isEditingName = uiState.editingName === cardKey;
+  const isEditingName = isOpen && uiState.editingName === cardKey;
   const previous = isOpen && item.name ? getActivityHistory({ name: item.name, kind }) : [];
   const placeholderSource = isOpen && item.name ? getLatestActivitySnapshot({ name: item.name, kind }) : null;
   return `
@@ -996,7 +996,7 @@ function renderCustomCard(item, index, options = {}) {
           ${isEditingName ? `
             <input class="activity-name-input" type="text" data-field="activity-name" data-custom-index="${index}" value="${escapeAttr(item.name)}" data-original-value="${escapeAttr(item.name)}" aria-label="Naam">
           ` : `
-            <button class="activity-name-display" type="button" data-action="edit-name" data-custom-index="${index}">${escapeHtml(item.name || "Naam")}</button>
+            <button class="activity-name-display" type="button" data-action="${isOpen ? "edit-name" : "toggle-card"}" data-custom-index="${index}">${escapeHtml(item.name || "Naam")}</button>
           `}
           <span class="exercise-subtitle">${escapeHtml(getCardSubtitle(summary, item))}</span>
         </div>
@@ -2299,6 +2299,8 @@ function toggleExerciseCard(source) {
   const key = getRefKey(getRefFromElement(source));
   if (uiState.expandedCards.has(key)) {
     uiState.expandedCards.delete(key);
+    if (uiState.editingName === key) uiState.editingName = null;
+    if (uiState.editingSetup === key) uiState.editingSetup = null;
   } else {
     uiState.expandedCards.add(key);
   }
@@ -2319,6 +2321,7 @@ function editSetup(trigger) {
 
 function editActivityName(trigger) {
   const key = getRefKey(getRefFromElement(trigger));
+  if (!uiState.expandedCards.has(key)) return;
   uiState.editingName = key;
   renderTraining();
   requestAnimationFrame(() => {
@@ -2330,6 +2333,7 @@ function editActivityName(trigger) {
 
 function editProgramExerciseName(trigger) {
   const key = getRefKey(getRefFromElement(trigger));
+  if (!uiState.expandedCards.has(key)) return;
   uiState.editingName = key;
   renderTraining();
   requestAnimationFrame(() => {
