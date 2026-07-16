@@ -208,7 +208,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "140";
+const APP_VERSION = "141";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -948,13 +948,15 @@ function renderTrainingTimeEstimate(session, workout) {
     return;
   }
 
-  const total = formatGymDuration(estimate.totalSeconds);
+  if (estimate.remainingSeconds <= 0) {
+    els.trainTimeEstimate.textContent = "klaar";
+    els.trainTimeEstimate.setAttribute("aria-label", "Training klaar.");
+    return;
+  }
+
   const remaining = formatGymDuration(estimate.remainingSeconds);
-  els.trainTimeEstimate.textContent = `± ${total} · ${estimate.remainingSeconds > 0 ? `${remaining} over` : "klaar"}`;
-  els.trainTimeEstimate.setAttribute(
-    "aria-label",
-    `Verwachte gymtijd ${total}. ${estimate.remainingSeconds > 0 ? `${remaining} resterend` : "Training klaar"}.`,
-  );
+  els.trainTimeEstimate.textContent = `± ${remaining}`;
+  els.trainTimeEstimate.setAttribute("aria-label", `Nog ongeveer ${remaining} trainen.`);
 }
 
 function refreshTrainingTimeEstimate() {
