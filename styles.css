@@ -489,6 +489,25 @@ h1 {
   font-size: clamp(1.4rem, 5vw, 2rem);
 }
 
+.session-title-block {
+  min-width: 0;
+  display: grid;
+  align-content: center;
+  gap: 5px;
+}
+
+.session-time-estimate {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: clamp(0.68rem, 2.6vw, 0.76rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .title-progress {
   color: var(--muted);
   font-size: 0.48em;

@@ -9,6 +9,28 @@ const REST_TIMER_ALARM_REPEAT_MS = 3600;
 const REST_TIMER_AUDIO_READY_TIMEOUT_MS = 700;
 const REST_TIMER_ALARM_SET = "set";
 const REST_TIMER_ALARM_SIDE = "side";
+const GYM_TIME = Object.freeze({
+  repSeconds: 3,
+  sessionStartSeconds: 4 * 60,
+  benchExerciseSetupSeconds: 150,
+  compoundExerciseSetupSeconds: 105,
+  unilateralExerciseSetupSeconds: 75,
+  isolationExerciseSetupSeconds: 60,
+  metricExerciseSetupSeconds: 90,
+  benchSetPrepSeconds: 25,
+  compoundSetPrepSeconds: 20,
+  isolationSetPrepSeconds: 15,
+  compoundSidePrepSeconds: 15,
+  isolationSidePrepSeconds: 10,
+  setLogSeconds: 8,
+  metricAttemptPrepSeconds: 30,
+  metricRestSeconds: 2 * 60,
+  defaultCompoundReps: 6,
+  defaultIsolationReps: 10,
+  maxEstimatedReps: 30,
+  defaultRunSeconds: 30 * 60,
+  defaultCardioSeconds: 10 * 60,
+});
 
 const sessions = [
   {
@@ -186,7 +208,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "139";
+const APP_VERSION = "140";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -378,6 +400,7 @@ function bindElements() {
   els.trainTitle = document.getElementById("train-title");
   els.trainTitleLabel = document.getElementById("train-title-label");
   els.trainProgressCount = document.getElementById("train-progress-count");
+  els.trainTimeEstimate = document.getElementById("train-time-estimate");
   els.exerciseList = document.getElementById("exercise-list");
   els.historyList = document.getElementById("history-list");
   els.statsGrid = document.getElementById("stats-grid");
@@ -878,6 +901,7 @@ function renderTraining() {
   const totals = getCompletion(workout);
   const isOverig = session.id === "overig";
   renderTrainingTitle(session, totals, isOverig);
+  renderTrainingTimeEstimate(session, workout);
 
   const canAddCustom = session.id === "overig";
   els.exerciseList.dataset.sessionId = session.id;
@@ -911,6 +935,32 @@ function renderTrainingTitle(session, totals, isOverig) {
     return;
   }
   els.trainTitle.textContent = isOverig ? session.label : `${session.label} ${totals.done}/${totals.total}`;
+}
+
+function renderTrainingTimeEstimate(session, workout) {
+  if (!els.trainTimeEstimate) return;
+  const estimate = getWorkoutTimeEstimate(session, workout);
+  const visible = estimate.totalSeconds > 0;
+  els.trainTimeEstimate.hidden = !visible;
+  if (!visible) {
+    els.trainTimeEstimate.textContent = "";
+    els.trainTimeEstimate.removeAttribute("aria-label");
+    return;
+  }
+
+  const total = formatGymDuration(estimate.totalSeconds);
+  const remaining = formatGymDuration(estimate.remainingSeconds);
+  els.trainTimeEstimate.textContent = `± ${total} · ${estimate.remainingSeconds > 0 ? `${remaining} over` : "klaar"}`;
+  els.trainTimeEstimate.setAttribute(
+    "aria-label",
+    `Verwachte gymtijd ${total}. ${estimate.remainingSeconds > 0 ? `${remaining} resterend` : "Training klaar"}.`,
+  );
+}
+
+function refreshTrainingTimeEstimate() {
+  const session = findSession(state.activeSessionId);
+  if (!session) return;
+  renderTrainingTimeEstimate(session, getActiveWorkout());
 }
 
 function renderOverigQuickAdd(session) {
@@ -1832,6 +1882,7 @@ function renderRestTimer() {
   els.restTimer.dataset.state = restTimer.status;
   els.restTimer.hidden = !visible;
   document.body.classList.toggle("has-rest-timer", visible);
+  refreshTrainingTimeEstimate();
   if (!visible) return;
 
   const progress = restTimer.durationSeconds
@@ -3756,6 +3807,7 @@ function updateTrainingProgressReadout() {
   const workout = getActiveWorkout();
   if (!session || !workout) return;
   renderTrainingTitle(session, getCompletion(workout), session.id === "overig");
+  renderTrainingTimeEstimate(session, workout);
 }
 
 function resizeNoteTextareas(scope = document) {
@@ -3818,6 +3870,170 @@ function getCompletion(workout) {
     return sum + (entry.sets || []).filter((set) => hasCompleteStrengthSet(set, entry)).length;
   }, 0);
   return { done, total, percent: total ? Math.round((done / total) * 100) : 0 };
+}
+
+function getWorkoutTimeEstimate(session, workout) {
+  const schedule = getWorkoutTimeSchedule(session, workout);
+  const taskCount = schedule.reduce((sum, item) => sum + getTimeEstimateTasks(item.entry).length, 0);
+  if (!taskCount) return { totalSeconds: 0, remainingSeconds: 0 };
+
+  const hasStarted = schedule.some((item) => hasLoggedEntry(item.entry));
+  const activeTimerSeconds = restTimer.active ? getRestTimerRemainingSeconds() : 0;
+  const remainingContext = {
+    useActiveSideTimer: activeTimerSeconds > 0 && restTimer.alarmKind === REST_TIMER_ALARM_SIDE,
+    sideTimerUsed: false,
+  };
+  let totalSeconds = GYM_TIME.sessionStartSeconds;
+  let remainingSeconds = hasStarted ? 0 : GYM_TIME.sessionStartSeconds;
+  let taskIndex = 0;
+  let incompleteTasks = 0;
+
+  schedule.forEach(({ entry, exercise }) => {
+    const tasks = getTimeEstimateTasks(entry);
+    if (!tasks.length) return;
+    const setupSeconds = getExerciseSetupSeconds(entry);
+    totalSeconds += setupSeconds;
+    if (!hasLoggedEntry(entry)) remainingSeconds += setupSeconds;
+
+    const previous = getTimeEstimatePreviousSnapshot(entry, exercise);
+    tasks.forEach((task, entryTaskIndex) => {
+      const isLastTask = taskIndex >= taskCount - 1;
+      if (isMetricEntry(entry)) {
+        const previousAttempt = getPreviousMetricAttempt(previous, entryTaskIndex);
+        const attemptSeconds = getMetricAttemptEstimateSeconds(task, previousAttempt, entry);
+        const isComplete = hasCompleteMetricAttempt(task, entry.kind);
+        const restSeconds = entryTaskIndex < tasks.length - 1 ? GYM_TIME.metricRestSeconds : 0;
+        totalSeconds += attemptSeconds + restSeconds;
+        if (!isComplete) {
+          incompleteTasks += 1;
+          remainingSeconds += attemptSeconds + restSeconds;
+        }
+      } else {
+        const previousSet = previous?.sets?.[entryTaskIndex];
+        const setSeconds = getStrengthSetEstimateSeconds(task, previousSet, entry);
+        const isComplete = hasCompleteStrengthSet(task, entry);
+        const restSeconds = isLastTask ? 0 : getEntryRestSeconds(entry);
+        totalSeconds += setSeconds + restSeconds;
+        if (!isComplete) {
+          incompleteTasks += 1;
+          remainingSeconds += getStrengthSetRemainingSeconds(task, previousSet, entry, remainingContext) + restSeconds;
+        }
+      }
+      taskIndex += 1;
+    });
+  });
+
+  if (incompleteTasks > 0 && activeTimerSeconds > 0) remainingSeconds += activeTimerSeconds;
+  return {
+    totalSeconds: Math.max(0, Math.round(totalSeconds)),
+    remainingSeconds: Math.max(0, Math.round(remainingSeconds)),
+  };
+}
+
+function getWorkoutTimeSchedule(session, workout) {
+  if (!session || !workout) return [];
+  const programItems = session.exercises
+    .map((exercise) => ({ exercise, entry: workout.exercises?.[exercise.id] }))
+    .filter((item) => item.entry && (session.id !== "overig" || hasLoggedEntry(item.entry)));
+  if (session.id !== "overig") return programItems;
+  return [
+    ...programItems,
+    ...(workout.customItems || []).filter(Boolean).map((entry) => ({ exercise: null, entry })),
+  ];
+}
+
+function getTimeEstimateTasks(entry) {
+  if (isMetricEntry(entry)) return getMetricAttempts(entry);
+  return entry.sets || [];
+}
+
+function getTimeEstimatePreviousSnapshot(entry, exercise) {
+  return getLatestActivitySnapshot({
+    name: exercise ? getProgramExerciseName(exercise) : entry.name,
+    kind: getEntryKind(entry),
+    setup: entry.setup || exercise?.setup || "",
+  });
+}
+
+function getExerciseSetupSeconds(entry) {
+  if (isMetricEntry(entry)) return GYM_TIME.metricExerciseSetupSeconds;
+  if (isBenchTimeEstimate(entry)) return GYM_TIME.benchExerciseSetupSeconds;
+  if (isCompoundTimeEstimate(entry)) return GYM_TIME.compoundExerciseSetupSeconds;
+  if (isUnilateralEntry(entry)) return GYM_TIME.unilateralExerciseSetupSeconds;
+  return GYM_TIME.isolationExerciseSetupSeconds;
+}
+
+function getStrengthSetEstimateSeconds(set, previousSet, entry) {
+  const compound = isCompoundTimeEstimate(entry);
+  if (isUnilateralSet(set, entry)) {
+    return GYM_TIME.setLogSeconds
+      + getStrengthSideEstimateSeconds(set?.left, previousSet?.left, compound)
+      + REST_TIMER_SIDE_SECONDS
+      + getStrengthSideEstimateSeconds(set?.right, previousSet?.right, compound);
+  }
+
+  const prepSeconds = isBenchTimeEstimate(entry)
+    ? GYM_TIME.benchSetPrepSeconds
+    : (compound ? GYM_TIME.compoundSetPrepSeconds : GYM_TIME.isolationSetPrepSeconds);
+  return GYM_TIME.setLogSeconds + prepSeconds + getEstimatedReps(set, previousSet, compound) * GYM_TIME.repSeconds;
+}
+
+function getStrengthSetRemainingSeconds(set, previousSet, entry, context) {
+  if (hasCompleteStrengthSet(set, entry)) return 0;
+  const compound = isCompoundTimeEstimate(entry);
+  if (!isUnilateralSet(set, entry)) return getStrengthSetEstimateSeconds(set, previousSet, entry);
+
+  const leftComplete = hasCompleteStrengthSide(set?.left, entry);
+  const rightComplete = hasCompleteStrengthSide(set?.right, entry);
+  if (!leftComplete && !rightComplete) return getStrengthSetEstimateSeconds(set, previousSet, entry);
+
+  const pendingSide = leftComplete ? set?.right : set?.left;
+  const previousSide = leftComplete ? previousSet?.right : previousSet?.left;
+  let switchSeconds = REST_TIMER_SIDE_SECONDS;
+  if (context.useActiveSideTimer && !context.sideTimerUsed) {
+    context.sideTimerUsed = true;
+    switchSeconds = 0;
+  }
+  return GYM_TIME.setLogSeconds + switchSeconds + getStrengthSideEstimateSeconds(pendingSide, previousSide, compound);
+}
+
+function getStrengthSideEstimateSeconds(side, previousSide, compound) {
+  const prepSeconds = compound ? GYM_TIME.compoundSidePrepSeconds : GYM_TIME.isolationSidePrepSeconds;
+  return prepSeconds + getEstimatedReps(side, previousSide, compound) * GYM_TIME.repSeconds;
+}
+
+function getEstimatedReps(side, previousSide, compound) {
+  const candidate = [side?.reps, previousSide?.reps]
+    .map(parseNumber)
+    .find((value) => Number.isFinite(value) && value > 0);
+  const fallback = compound ? GYM_TIME.defaultCompoundReps : GYM_TIME.defaultIsolationReps;
+  return Math.min(GYM_TIME.maxEstimatedReps, Math.max(1, candidate || fallback));
+}
+
+function getMetricAttemptEstimateSeconds(attempt, previousAttempt, entry) {
+  const currentDuration = parseDurationToSeconds(attempt?.metrics?.duration);
+  const previousDuration = parseDurationToSeconds(previousAttempt?.metrics?.duration);
+  const name = normalizeExerciseName(entry?.name);
+  const fallback = entry?.kind === "run"
+    ? GYM_TIME.defaultRunSeconds
+    : (/1 minuut|top speed/.test(name) ? 60 : GYM_TIME.defaultCardioSeconds);
+  return GYM_TIME.metricAttemptPrepSeconds + (currentDuration || previousDuration || fallback);
+}
+
+function isCompoundTimeEstimate(entry) {
+  return getEntryRestSeconds(entry) >= REST_TIMER_COMPOUND_SECONDS;
+}
+
+function isBenchTimeEstimate(entry) {
+  return /bench|db press/.test(normalizeExerciseName(entry?.name));
+}
+
+function formatGymDuration(seconds) {
+  const minutes = Math.max(0, Math.ceil((Number(seconds) || 0) / 60));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}u${String(rest).padStart(2, "0")}` : `${hours}u`;
 }
 
 function countFilledWorkoutItems(workout) {
