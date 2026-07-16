@@ -183,7 +183,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "130";
+const APP_VERSION = "131";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -1816,28 +1816,43 @@ function playRestTimerAlarm() {
   const play = () => {
     if (restTimer.status !== "done") return;
     const now = context.currentTime;
+    // Original five-hit gym alarm motif: no sampled or licensed track audio.
     [
-      { frequency: 830.61, start: 0, duration: 0.14, gain: 0.1 },
-      { frequency: 1046.5, start: 0.18, duration: 0.14, gain: 0.1 },
-      { frequency: 830.61, start: 0.42, duration: 0.14, gain: 0.1 },
-      { frequency: 1046.5, start: 0.6, duration: 0.24, gain: 0.11 },
-      { frequency: 830.61, start: 1.05, duration: 0.14, gain: 0.1 },
-      { frequency: 1046.5, start: 1.23, duration: 0.28, gain: 0.11 },
+      { frequency: 554.37, start: 0, duration: 0.11, gain: 0.085, accent: false },
+      { frequency: 659.25, start: 0.15, duration: 0.11, gain: 0.085, accent: false },
+      { frequency: 739.99, start: 0.3, duration: 0.11, gain: 0.085, accent: false },
+      { frequency: 659.25, start: 0.45, duration: 0.11, gain: 0.085, accent: false },
+      { frequency: 880, start: 0.67, duration: 0.28, gain: 0.115, accent: true },
     ].forEach((note) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
+      const lead = context.createOscillator();
+      const leadGain = context.createGain();
+      const kick = context.createOscillator();
+      const kickGain = context.createGain();
       const start = now + note.start;
       const end = start + note.duration;
-      oscillator.type = "square";
-      oscillator.frequency.setValueAtTime(note.frequency, start);
-      gain.gain.setValueAtTime(0.0001, start);
-      gain.gain.exponentialRampToValueAtTime(note.gain, start + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.0001, end);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start(start);
-      oscillator.stop(end + 0.03);
+
+      lead.type = "square";
+      lead.frequency.setValueAtTime(note.frequency, start);
+      lead.frequency.exponentialRampToValueAtTime(note.frequency * 0.975, end);
+      leadGain.gain.setValueAtTime(0.0001, start);
+      leadGain.gain.exponentialRampToValueAtTime(note.gain, start + 0.012);
+      leadGain.gain.exponentialRampToValueAtTime(0.0001, end);
+      lead.connect(leadGain).connect(context.destination);
+      lead.start(start);
+      lead.stop(end + 0.03);
+
+      const kickEnd = start + Math.min(note.duration, note.accent ? 0.18 : 0.12);
+      kick.type = "sine";
+      kick.frequency.setValueAtTime(note.accent ? 128 : 108, start);
+      kick.frequency.exponentialRampToValueAtTime(48, kickEnd);
+      kickGain.gain.setValueAtTime(0.0001, start);
+      kickGain.gain.exponentialRampToValueAtTime(note.accent ? 0.09 : 0.058, start + 0.008);
+      kickGain.gain.exponentialRampToValueAtTime(0.0001, kickEnd);
+      kick.connect(kickGain).connect(context.destination);
+      kick.start(start);
+      kick.stop(kickEnd + 0.03);
     });
-    navigator.vibrate?.([100, 65, 100, 65, 220]);
+    navigator.vibrate?.([55, 70, 55, 70, 55, 70, 55, 115, 180]);
   };
 
   if (context.state === "suspended") {
