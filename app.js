@@ -6,6 +6,7 @@ const REST_TIMER_ISOLATION_SECONDS = 3 * 60;
 const REST_TIMER_SIDE_SECONDS = 30;
 const REST_TIMER_TICK_MS = 250;
 const REST_TIMER_ALARM_REPEAT_MS = 3600;
+const REST_TIMER_AUDIO_READY_TIMEOUT_MS = 700;
 const REST_TIMER_ALARM_SET = "set";
 const REST_TIMER_ALARM_SIDE = "side";
 
@@ -185,7 +186,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "137";
+const APP_VERSION = "138";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -274,6 +275,16 @@ const restTimer = {
   alarmMedia: null,
   audioContext: null,
   audioUnlocked: false,
+  alarmBuffers: {
+    [REST_TIMER_ALARM_SET]: null,
+    [REST_TIMER_ALARM_SIDE]: null,
+  },
+  alarmBufferPromises: {
+    [REST_TIMER_ALARM_SET]: null,
+    [REST_TIMER_ALARM_SIDE]: null,
+  },
+  alarmSource: null,
+  alarmGain: null,
   mediaPrimeIndex: 0,
   completionKeys: new Set(),
 };
@@ -1784,6 +1795,20 @@ function clearRestTimerAlarm() {
   restTimer.alarmFallbackActive = false;
   restTimer.alarmPlaybackPending = false;
   restTimer.alarmSequence += 1;
+  if (restTimer.alarmSource) {
+    const source = restTimer.alarmSource;
+    const gain = restTimer.alarmGain;
+    restTimer.alarmSource = null;
+    restTimer.alarmGain = null;
+    source.onended = null;
+    try {
+      source.stop();
+    } catch {}
+    try {
+      source.disconnect();
+      gain?.disconnect();
+    } catch {}
+  }
   restTimer.alarmMedia = null;
   stopRestTimerMediaElement(els.restAlarmAudio);
   stopRestTimerMediaElement(els.sideAlarmAudio);
@@ -1851,7 +1876,34 @@ function prepareRestTimerAudio() {
     audio.dataset.prepared = "true";
     audio.load();
   });
-  return ensureRestTimerAudioContext();
+  const context = ensureRestTimerAudioContext();
+  if (!context) return null;
+  loadRestTimerAudioBuffer(context, REST_TIMER_ALARM_SET, `rest-alarm.mp3?v=${APP_VERSION}`);
+  loadRestTimerAudioBuffer(context, REST_TIMER_ALARM_SIDE, `side-alarm.mp3?v=${APP_VERSION}`);
+  return context;
+}
+
+function loadRestTimerAudioBuffer(context, kind, url) {
+  if (restTimer.alarmBuffers[kind]) return Promise.resolve(restTimer.alarmBuffers[kind]);
+  if (restTimer.alarmBufferPromises[kind]) return restTimer.alarmBufferPromises[kind];
+
+  const promise = fetch(url, { cache: "force-cache" })
+    .then((response) => {
+      if (!response.ok) throw new Error("Alarm audio kon niet worden geladen.");
+      return response.arrayBuffer();
+    })
+    .then((data) => context.decodeAudioData(data))
+    .then((buffer) => {
+      restTimer.alarmBuffers[kind] = buffer;
+      return buffer;
+    })
+    .catch(() => null)
+    .finally(() => {
+      restTimer.alarmBufferPromises[kind] = null;
+    });
+
+  restTimer.alarmBufferPromises[kind] = promise;
+  return promise;
 }
 
 function unlockRestTimerAudio() {
@@ -1942,14 +1994,118 @@ function recoverRestTimerAudio() {
     });
   }
 
-  if (restTimer.status === "done" && (!restTimer.alarmMedia || restTimer.alarmMedia.paused)) {
+  if (
+    restTimer.status === "done"
+    && !restTimer.alarmSource
+    && !restTimer.alarmPlaybackPending
+    && (!restTimer.alarmMedia || restTimer.alarmMedia.paused)
+  ) {
     playRestTimerAlarm();
   }
 }
 
 function playRestTimerAlarm() {
   if (restTimer.status !== "done" || restTimer.alarmPlaybackPending) return;
+  if (restTimer.alarmSource) return;
   if (restTimer.alarmMedia && !restTimer.alarmMedia.paused) return;
+
+  const kind = restTimer.alarmKind === REST_TIMER_ALARM_SIDE
+    ? REST_TIMER_ALARM_SIDE
+    : REST_TIMER_ALARM_SET;
+  const context = prepareRestTimerAudio();
+  const sequence = restTimer.alarmSequence;
+  const buffer = restTimer.alarmBuffers[kind];
+
+  if (context && context.state === "running" && buffer) {
+    if (!startRestTimerBufferAlarm(buffer)) playRestTimerMediaAlarm();
+    return;
+  }
+
+  if (context) {
+    restTimer.alarmPlaybackPending = true;
+    const bufferPromise = buffer
+      ? Promise.resolve(buffer)
+      : waitForRestTimerAudioBuffer(restTimer.alarmBufferPromises[kind]);
+    const resumePromise = context.state === "running"
+      ? Promise.resolve(true)
+      : resumeRestTimerAudioContext(context);
+
+    Promise.all([bufferPromise, resumePromise]).then(([loadedBuffer]) => {
+      if (sequence !== restTimer.alarmSequence || restTimer.status !== "done") return;
+      restTimer.alarmPlaybackPending = false;
+      if (loadedBuffer && context.state === "running" && startRestTimerBufferAlarm(loadedBuffer)) return;
+      playRestTimerMediaAlarm();
+    });
+    return;
+  }
+
+  playRestTimerMediaAlarm();
+}
+
+function waitForRestTimerAudioBuffer(bufferPromise) {
+  if (!bufferPromise) return Promise.resolve(null);
+  return Promise.race([
+    bufferPromise,
+    new Promise((resolve) => setTimeout(() => resolve(null), REST_TIMER_AUDIO_READY_TIMEOUT_MS)),
+  ]);
+}
+
+function resumeRestTimerAudioContext(context) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (running) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(running);
+    };
+    const timeout = setTimeout(() => finish(false), REST_TIMER_AUDIO_READY_TIMEOUT_MS);
+    context.resume()
+      .then(() => finish(context.state === "running"))
+      .catch(() => finish(false));
+  });
+}
+
+function startRestTimerBufferAlarm(buffer) {
+  if (restTimer.status !== "done" || restTimer.alarmSource) return false;
+  const context = restTimer.audioContext;
+  if (!context || context.state !== "running") return false;
+
+  const sideChange = restTimer.alarmKind === REST_TIMER_ALARM_SIDE;
+  try {
+    const source = context.createBufferSource();
+    const gain = context.createGain();
+    source.buffer = buffer;
+    source.loop = !sideChange;
+    gain.gain.setValueAtTime(sideChange ? 1 : 0.95, context.currentTime);
+    source.connect(gain).connect(context.destination);
+    source.onended = () => {
+      if (restTimer.alarmSource === source) {
+        restTimer.alarmSource = null;
+        restTimer.alarmGain = null;
+      }
+      try {
+        source.disconnect();
+        gain.disconnect();
+      } catch {}
+    };
+    restTimer.alarmSource = source;
+    restTimer.alarmGain = gain;
+    restTimer.alarmMedia = null;
+    restTimer.alarmFallbackActive = false;
+    source.start(0);
+    if (els.restAlarm) els.restAlarm.dataset.playback = "webaudio";
+    navigator.vibrate?.(sideChange ? [70, 55, 120] : [80, 65, 80, 65, 180]);
+    return true;
+  } catch {
+    restTimer.alarmSource = null;
+    restTimer.alarmGain = null;
+    return false;
+  }
+}
+
+function playRestTimerMediaAlarm() {
+  if (restTimer.status !== "done" || restTimer.alarmPlaybackPending || restTimer.alarmSource) return;
 
   const sideChange = restTimer.alarmKind === REST_TIMER_ALARM_SIDE;
   const audio = sideChange ? els.sideAlarmAudio : els.restAlarmAudio;
@@ -2004,7 +2160,12 @@ function stopRestTimerMediaElement(audio) {
 }
 
 function startRestTimerFallbackAlarm() {
-  if (restTimer.status !== "done" || restTimer.alarmFallbackActive) return;
+  if (
+    restTimer.status !== "done"
+    || restTimer.alarmFallbackActive
+    || restTimer.alarmSource
+    || (restTimer.alarmMedia && !restTimer.alarmMedia.paused)
+  ) return;
   const context = ensureRestTimerAudioContext();
   if (!context || context.state === "closed") {
     if (els.restAlarm) els.restAlarm.dataset.playback = "blocked";
