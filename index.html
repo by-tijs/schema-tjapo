@@ -14,10 +14,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=128">
+  <link rel="stylesheet" href="styles.css?v=129">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=128" defer></script>
-  <script src="app.js?v=128" defer></script>
+  <script src="firebase-config.js?v=129" defer></script>
+  <script src="app.js?v=129" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -202,6 +202,23 @@
     <button class="rest-timer-dismiss" type="button" data-action="rest-timer-dismiss" aria-label="Sluit rusttimer" title="Sluit rusttimer">
       <i data-lucide="x"></i>
     </button>
+  </div>
+
+  <div id="rest-alarm" class="rest-alarm" hidden>
+    <div class="rest-alarm-backdrop" aria-hidden="true"></div>
+    <section class="rest-alarm-card" role="alertdialog" aria-modal="true" aria-labelledby="rest-alarm-title">
+      <div class="rest-alarm-heading">
+        <span class="rest-alarm-icon" aria-hidden="true"><i data-lucide="alarm-clock"></i></span>
+        <div>
+          <span class="panel-label">Rust klaar</span>
+          <h2 id="rest-alarm-title">Volgende set.</h2>
+        </div>
+      </div>
+      <button class="primary-button rest-alarm-action" type="button" data-action="rest-alarm-dismiss">
+        <i data-lucide="dumbbell"></i>
+        <span>Start set</span>
+      </button>
+    </section>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

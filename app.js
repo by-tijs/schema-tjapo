@@ -5,7 +5,7 @@ const REST_TIMER_COMPOUND_SECONDS = 5 * 60;
 const REST_TIMER_ISOLATION_SECONDS = 3 * 60;
 const REST_TIMER_SIDE_SECONDS = 30;
 const REST_TIMER_TICK_MS = 250;
-const REST_TIMER_DONE_VISIBLE_MS = 4200;
+const REST_TIMER_ALARM_REPEAT_MS = 3600;
 
 const sessions = [
   {
@@ -183,7 +183,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "128";
+const APP_VERSION = "129";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -263,7 +263,8 @@ const restTimer = {
   remainingSeconds: 0,
   endsAt: 0,
   interval: null,
-  hideTimeout: null,
+  alarmInterval: null,
+  alarmHideTimeout: null,
   audioContext: null,
   completionKeys: new Set(),
 };
@@ -380,6 +381,7 @@ function bindElements() {
   els.confirmActionLabel = document.getElementById("confirm-action-label");
   els.restTimer = document.getElementById("rest-timer");
   els.restTimerValue = document.getElementById("rest-timer-value");
+  els.restAlarm = document.getElementById("rest-alarm");
   els.toast = document.getElementById("toast");
 }
 
@@ -1401,6 +1403,7 @@ function runAction(trigger) {
   if (action === "rest-timer-subtract") addRestTimerSeconds(-30);
   if (action === "rest-timer-add") addRestTimerSeconds(30);
   if (action === "rest-timer-dismiss") stopRestTimer();
+  if (action === "rest-alarm-dismiss") stopRestTimer();
   if (action === "complete-session") completeSession();
   if (action === "reset-current") resetCurrent();
   if (action === "reset-cycle") resetCycle();
@@ -1635,7 +1638,7 @@ function isLikelyCompoundExercise(name) {
 function startRestTimer(seconds) {
   const duration = Math.max(1, Math.round(Number(seconds) || REST_TIMER_ISOLATION_SECONDS));
   clearRestTimerInterval();
-  clearTimeout(restTimer.hideTimeout);
+  clearRestTimerAlarm();
   restTimer.active = true;
   restTimer.status = "running";
   restTimer.durationSeconds = duration;
@@ -1681,19 +1684,17 @@ function addRestTimerSeconds(seconds) {
 
 function finishRestTimer() {
   clearRestTimerInterval();
+  restTimer.active = false;
   restTimer.status = "done";
   restTimer.remainingSeconds = 0;
   restTimer.endsAt = 0;
   renderRestTimer();
-  playRestTimerSound();
-  clearTimeout(restTimer.hideTimeout);
-  restTimer.hideTimeout = setTimeout(stopRestTimer, REST_TIMER_DONE_VISIBLE_MS);
+  openRestTimerAlarm();
 }
 
 function stopRestTimer() {
   clearRestTimerInterval();
-  clearTimeout(restTimer.hideTimeout);
-  restTimer.hideTimeout = null;
+  clearRestTimerAlarm();
   restTimer.active = false;
   restTimer.status = "idle";
   restTimer.durationSeconds = 0;
@@ -1705,6 +1706,41 @@ function stopRestTimer() {
 function clearRestTimerInterval() {
   clearInterval(restTimer.interval);
   restTimer.interval = null;
+}
+
+function openRestTimerAlarm() {
+  clearInterval(restTimer.alarmInterval);
+  restTimer.alarmInterval = null;
+  clearTimeout(restTimer.alarmHideTimeout);
+  restTimer.alarmHideTimeout = null;
+
+  if (els.restAlarm) {
+    els.restAlarm.hidden = false;
+    requestAnimationFrame(() => {
+      els.restAlarm.classList.add("is-visible");
+      els.restAlarm.querySelector('[data-action="rest-alarm-dismiss"]')?.focus({ preventScroll: true });
+    });
+  }
+
+  prepareRestTimerAudio();
+  playRestTimerAlarm();
+  restTimer.alarmInterval = setInterval(playRestTimerAlarm, REST_TIMER_ALARM_REPEAT_MS);
+  refreshIcons();
+}
+
+function clearRestTimerAlarm() {
+  clearInterval(restTimer.alarmInterval);
+  restTimer.alarmInterval = null;
+  clearTimeout(restTimer.alarmHideTimeout);
+  restTimer.alarmHideTimeout = null;
+  navigator.vibrate?.(0);
+
+  if (!els.restAlarm || els.restAlarm.hidden) return;
+  els.restAlarm.classList.remove("is-visible");
+  restTimer.alarmHideTimeout = setTimeout(() => {
+    els.restAlarm.hidden = true;
+    restTimer.alarmHideTimeout = null;
+  }, 160);
 }
 
 function renderRestTimer() {
@@ -1740,22 +1776,27 @@ function prepareRestTimerAudio() {
   }
 }
 
-function playRestTimerSound() {
+function playRestTimerAlarm() {
+  if (restTimer.status !== "done") return;
   const context = restTimer.audioContext;
   if (!context || context.state === "closed") return;
 
   const play = () => {
+    if (restTimer.status !== "done") return;
     const now = context.currentTime;
     [
-      { frequency: 523.25, start: 0, duration: 0.14, type: "triangle", gain: 0.12 },
-      { frequency: 659.25, start: 0.13, duration: 0.17, type: "sine", gain: 0.13 },
-      { frequency: 880, start: 0.29, duration: 0.34, type: "sine", gain: 0.16 },
+      { frequency: 830.61, start: 0, duration: 0.14, gain: 0.1 },
+      { frequency: 1046.5, start: 0.18, duration: 0.14, gain: 0.1 },
+      { frequency: 830.61, start: 0.42, duration: 0.14, gain: 0.1 },
+      { frequency: 1046.5, start: 0.6, duration: 0.24, gain: 0.11 },
+      { frequency: 830.61, start: 1.05, duration: 0.14, gain: 0.1 },
+      { frequency: 1046.5, start: 1.23, duration: 0.28, gain: 0.11 },
     ].forEach((note) => {
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       const start = now + note.start;
       const end = start + note.duration;
-      oscillator.type = note.type;
+      oscillator.type = "square";
       oscillator.frequency.setValueAtTime(note.frequency, start);
       gain.gain.setValueAtTime(0.0001, start);
       gain.gain.exponentialRampToValueAtTime(note.gain, start + 0.018);
@@ -1764,6 +1805,7 @@ function playRestTimerSound() {
       oscillator.start(start);
       oscillator.stop(end + 0.03);
     });
+    navigator.vibrate?.([100, 65, 100, 65, 220]);
   };
 
   if (context.state === "suspended") {

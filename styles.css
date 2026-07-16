@@ -1708,6 +1708,83 @@ h1 {
   font-size: 0.9rem;
 }
 
+.rest-alarm {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: max(var(--page-pad), env(safe-area-inset-top)) var(--page-pad) max(var(--page-pad), env(safe-area-inset-bottom));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+}
+
+.rest-alarm.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.rest-alarm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.66);
+  backdrop-filter: blur(10px);
+}
+
+.rest-alarm-card {
+  position: relative;
+  width: min(360px, 100%);
+  display: grid;
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #101214;
+  box-shadow: var(--shadow);
+  padding: clamp(16px, 5vw, 22px);
+  transform: translateY(10px) scale(0.98);
+  transition: transform 160ms ease;
+}
+
+.rest-alarm.is-visible .rest-alarm-card {
+  transform: translateY(0) scale(1);
+}
+
+.rest-alarm-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rest-alarm-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--green);
+  color: #111315;
+}
+
+.rest-alarm-icon .lucide {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.25;
+}
+
+.rest-alarm-card h2 {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: clamp(1.15rem, 4.5vw, 1.4rem);
+  line-height: 1.08;
+}
+
+.rest-alarm-action {
+  width: 100%;
+  min-height: 46px;
+}
+
 .date-picker {
   position: fixed;
   inset: 0;
