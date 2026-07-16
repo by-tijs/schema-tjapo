@@ -183,7 +183,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "131";
+const APP_VERSION = "132";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -266,6 +266,9 @@ const restTimer = {
   alarmInterval: null,
   alarmHideTimeout: null,
   audioContext: null,
+  alarmBuffer: null,
+  alarmBufferPromise: null,
+  alarmSource: null,
   completionKeys: new Set(),
 };
 
@@ -1744,13 +1747,21 @@ function openRestTimerAlarm() {
 
   prepareRestTimerAudio();
   playRestTimerAlarm();
-  restTimer.alarmInterval = setInterval(playRestTimerAlarm, REST_TIMER_ALARM_REPEAT_MS);
   refreshIcons();
 }
 
 function clearRestTimerAlarm() {
   clearInterval(restTimer.alarmInterval);
   restTimer.alarmInterval = null;
+  if (restTimer.alarmSource) {
+    const source = restTimer.alarmSource;
+    restTimer.alarmSource = null;
+    source.onended = null;
+    try {
+      source.stop();
+      source.disconnect();
+    } catch {}
+  }
   clearTimeout(restTimer.alarmHideTimeout);
   restTimer.alarmHideTimeout = null;
   navigator.vibrate?.(0);
@@ -1806,17 +1817,89 @@ function prepareRestTimerAudio() {
   if (restTimer.audioContext.state === "suspended") {
     restTimer.audioContext.resume().catch(() => {});
   }
+
+  if (!restTimer.alarmBuffer && !restTimer.alarmBufferPromise) {
+    restTimer.alarmBufferPromise = fetch(`rest-alarm.mp3?v=${APP_VERSION}`, { cache: "force-cache" })
+      .then((response) => {
+        if (!response.ok) throw new Error("Alarm audio kon niet worden geladen.");
+        return response.arrayBuffer();
+      })
+      .then((data) => restTimer.audioContext.decodeAudioData(data))
+      .then((buffer) => {
+        restTimer.alarmBuffer = buffer;
+        return buffer;
+      })
+      .catch(() => null)
+      .finally(() => {
+        if (!restTimer.alarmBuffer) restTimer.alarmBufferPromise = null;
+      });
+  }
 }
 
 function playRestTimerAlarm() {
   if (restTimer.status !== "done") return;
   const context = restTimer.audioContext;
-  if (!context || context.state === "closed") return;
+  if (!context || context.state === "closed") {
+    startRestTimerFallbackAlarm();
+    return;
+  }
 
   const play = () => {
     if (restTimer.status !== "done") return;
-    const now = context.currentTime;
-    // Original five-hit gym alarm motif: no sampled or licensed track audio.
+    if (restTimer.alarmBuffer) {
+      startRestTimerTrack(restTimer.alarmBuffer);
+      return;
+    }
+    if (restTimer.alarmBufferPromise) {
+      restTimer.alarmBufferPromise.then((buffer) => {
+        if (buffer) startRestTimerTrack(buffer);
+        else startRestTimerFallbackAlarm();
+      });
+      return;
+    }
+    startRestTimerFallbackAlarm();
+  };
+
+  if (context.state === "suspended") {
+    context.resume().then(play).catch(startRestTimerFallbackAlarm);
+  } else {
+    play();
+  }
+}
+
+function startRestTimerTrack(buffer) {
+  if (restTimer.status !== "done" || restTimer.alarmSource) return;
+  const context = restTimer.audioContext;
+  if (!context || context.state === "closed") {
+    startRestTimerFallbackAlarm();
+    return;
+  }
+
+  const source = context.createBufferSource();
+  const gain = context.createGain();
+  source.buffer = buffer;
+  source.loop = true;
+  gain.gain.setValueAtTime(0.82, context.currentTime);
+  source.connect(gain).connect(context.destination);
+  source.onended = () => {
+    if (restTimer.alarmSource === source) restTimer.alarmSource = null;
+  };
+  restTimer.alarmSource = source;
+  source.start();
+  navigator.vibrate?.([80, 65, 80, 65, 180]);
+}
+
+function startRestTimerFallbackAlarm() {
+  if (restTimer.status !== "done" || restTimer.alarmInterval || restTimer.alarmSource) return;
+  playRestTimerFallbackSound();
+  restTimer.alarmInterval = setInterval(playRestTimerFallbackSound, REST_TIMER_ALARM_REPEAT_MS);
+}
+
+function playRestTimerFallbackSound() {
+  if (restTimer.status !== "done") return;
+  const context = restTimer.audioContext;
+  if (!context || context.state !== "running") return;
+  const now = context.currentTime;
     [
       { frequency: 554.37, start: 0, duration: 0.11, gain: 0.085, accent: false },
       { frequency: 659.25, start: 0.15, duration: 0.11, gain: 0.085, accent: false },
@@ -1852,14 +1935,7 @@ function playRestTimerAlarm() {
       kick.start(start);
       kick.stop(kickEnd + 0.03);
     });
-    navigator.vibrate?.([55, 70, 55, 70, 55, 70, 55, 115, 180]);
-  };
-
-  if (context.state === "suspended") {
-    context.resume().then(play).catch(() => {});
-  } else {
-    play();
-  }
+  navigator.vibrate?.([55, 70, 55, 70, 55, 70, 55, 115, 180]);
 }
 
 function handleFocusOut(event) {
