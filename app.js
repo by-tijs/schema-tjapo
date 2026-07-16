@@ -1,6 +1,11 @@
 "use strict";
 
 const STORAGE_KEY = "herpakkingsseason.tracker.v1";
+const REST_TIMER_COMPOUND_SECONDS = 5 * 60;
+const REST_TIMER_ISOLATION_SECONDS = 3 * 60;
+const REST_TIMER_SIDE_SECONDS = 30;
+const REST_TIMER_TICK_MS = 250;
+const REST_TIMER_DONE_VISIBLE_MS = 4200;
 
 const sessions = [
   {
@@ -9,8 +14,8 @@ const sessions = [
     label: "Upper A",
     cycle: true,
     exercises: [
-      ex("paused-bench", "Paused Bench", 3, "16"),
-      bodyweight("weighted-pull-ups", "Weighted pull ups", 2),
+      compound("paused-bench", "Paused Bench", 3, "16"),
+      compoundBodyweight("weighted-pull-ups", "Weighted pull ups", 2),
       unilateral("single-cable-press", "Single cable press", 2, "-22"),
       unilateral("cuffed-laterial", "Cuffed Laterial", 2, "-25"),
       ex("db-incline-curls", "Db incline curls", 2),
@@ -23,9 +28,9 @@ const sessions = [
     label: "Upper B",
     cycle: true,
     exercises: [
-      ex("slow-eccentric-bench", "Slow eccentric bench", 3, "16"),
-      unilateral("illiac-row", "Illiac row", 2, "hoogste"),
-      ex("weighted-dips", "Weighted dips", 2, "17"),
+      compound("slow-eccentric-bench", "Slow eccentric bench", 3, "16"),
+      compoundUnilateral("illiac-row", "Illiac row", 2, "hoogste"),
+      compound("weighted-dips", "Weighted dips", 2, "17"),
       ex("seated-db-side-delts", "Seated db side delts", 2),
       ex("cable-bar-reverse-curls", "Cable bar reverse curls", 2),
       ex("rope-pushdown", "Rope pushdown", 2, "hoogste"),
@@ -37,9 +42,9 @@ const sessions = [
     label: "Upper C",
     cycle: true,
     exercises: [
-      ex("paused-bench-c", "Paused bench", 3, "16"),
-      unilateral("cable-single-row", "Cable single row", 2, "1 boven L"),
-      ex("smith-incline-bench", "Smith incline bench", 2),
+      compound("paused-bench-c", "Paused bench", 3, "16"),
+      compoundUnilateral("cable-single-row", "Cable single row", 2, "1 boven L"),
+      compound("smith-incline-bench", "Smith incline bench", 2),
       unilateral("cuffed-laterial-c", "Cuffed Laterial", 2, "22"),
       unilateral("cable-preacher-curls", "Cable preacher curls", 2, "laagste"),
       ex("seated-bar-pushdowns", "Seated bar pushdowns", 2),
@@ -51,9 +56,9 @@ const sessions = [
     label: "Upper D",
     cycle: false,
     exercises: [
-      ex("barbell-bench", "Barbell Bench", 3, "16"),
+      compound("barbell-bench", "Barbell Bench", 3, "16"),
       ex("cable-lat-prayer", "Cable lat prayer", 2, "hoogste"),
-      ex("smith-shoulder-press", "Smith shoulder press", 2),
+      compound("smith-shoulder-press", "Smith shoulder press", 2),
       ex("y-raises", "Y-raises", 2, "22"),
       ex("supinated-db-bicep-curls", "Supinated db bicep curls", 2),
       unilateral("single-arm-pushdowns", "Single arm pushdowns", 2, "hoogste"),
@@ -65,7 +70,7 @@ const sessions = [
     label: "Lower A",
     cycle: true,
     exercises: [
-      ex("smith-sissy-squats", "Smith sissy squats", 2),
+      compound("smith-sissy-squats", "Smith sissy squats", 2),
       unilateral("db-hamstring-curls", "Db hamstring curls", 2),
       unilateral("calve-raises", "Calve raises", 2),
       ex("neck-extentsions", "Neck extentsions", 2),
@@ -80,7 +85,7 @@ const sessions = [
     label: "Lower B",
     cycle: true,
     exercises: [
-      ex("smith-sissy-squats-b", "Smith sissy squats", 2),
+      compound("smith-sissy-squats-b", "Smith sissy squats", 2),
       unilateral("db-hamstring-curls-b", "Db hamstring curls", 2),
       unilateral("calve-raises-b", "Calve raises", 2),
       unilateral("neck-side", "Neck side", 2, "12"),
@@ -95,7 +100,7 @@ const sessions = [
     label: "Lower C",
     cycle: true,
     exercises: [
-      ex("smith-sissy-squats-c", "Smith sissy squats", 2),
+      compound("smith-sissy-squats-c", "Smith sissy squats", 2),
       unilateral("db-hamstring-curls-c", "Db hamstring curls", 2),
       unilateral("calve-raises-c", "Calve raises", 2),
       ex("neck-curls", "Neck curls", 2, "4"),
@@ -110,7 +115,7 @@ const sessions = [
     label: "Lower D",
     cycle: false,
     exercises: [
-      ex("smith-sissy-squats-d", "Smith sissy squats", 2),
+      compound("smith-sissy-squats-d", "Smith sissy squats", 2),
       unilateral("db-hamstring-curls-d", "Db hamstring curls", 2),
       unilateral("calve-raises-d", "Calve raises", 2),
       unilateral("neck-twist", "Neck twist", 2, "10"),
@@ -128,10 +133,10 @@ const sessions = [
       ex("hardlopen", "Hardlopen", 1, "run"),
       ex("airbike-1-minuut", "Echo Bike (1 minuut)", 1, "cardio"),
       ex("airbike-topspeed", "Echo Bike (Top Speed)", 1, "cardio"),
-      ex("deadlift", "Deadlift", 2),
-      ex("db-shoulder-press", "DB Shoulder Press", 2),
-      ex("incline-db-press", "Incline DB press", 2),
-      ex("db-press", "DB press", 2),
+      compound("deadlift", "Deadlift", 2),
+      compound("db-shoulder-press", "DB Shoulder Press", 2),
+      compound("incline-db-press", "Incline DB press", 2),
+      compound("db-press", "DB press", 2),
     ],
   },
 ];
@@ -178,7 +183,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "126";
+const APP_VERSION = "127";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -251,6 +256,18 @@ const cloudSync = {
   lastSyncedAt: "",
   status: "Firebase nog niet ingesteld.",
 };
+const restTimer = {
+  active: false,
+  status: "idle",
+  label: "Rust",
+  durationSeconds: 0,
+  remainingSeconds: 0,
+  endsAt: 0,
+  interval: null,
+  hideTimeout: null,
+  audioContext: null,
+  completionKeys: new Set(),
+};
 
 const els = {};
 
@@ -269,12 +286,24 @@ function ex(id, name, setCount, kindOrSetup = "strength", setup = "", options = 
   };
 }
 
-function unilateral(id, name, setCount, setup = "") {
-  return ex(id, name, setCount, "strength", setup, { unilateral: true });
+function unilateral(id, name, setCount, setup = "", options = {}) {
+  return ex(id, name, setCount, "strength", setup, { unilateral: true, ...options });
 }
 
-function bodyweight(id, name, setCount, setup = "") {
-  return ex(id, name, setCount, "strength", setup, { usesBodyweight: true });
+function bodyweight(id, name, setCount, setup = "", options = {}) {
+  return ex(id, name, setCount, "strength", setup, { usesBodyweight: true, ...options });
+}
+
+function compound(id, name, setCount, setup = "") {
+  return ex(id, name, setCount, "strength", setup, { restSeconds: REST_TIMER_COMPOUND_SECONDS });
+}
+
+function compoundUnilateral(id, name, setCount, setup = "") {
+  return unilateral(id, name, setCount, setup, { restSeconds: REST_TIMER_COMPOUND_SECONDS });
+}
+
+function compoundBodyweight(id, name, setCount, setup = "") {
+  return bodyweight(id, name, setCount, setup, { restSeconds: REST_TIMER_COMPOUND_SECONDS });
 }
 
 function getProgramExerciseName(exercise) {
@@ -350,6 +379,11 @@ function bindElements() {
   els.confirmTitle = document.getElementById("confirm-title");
   els.confirmMessage = document.getElementById("confirm-message");
   els.confirmActionLabel = document.getElementById("confirm-action-label");
+  els.restTimer = document.getElementById("rest-timer");
+  els.restTimerLabel = document.getElementById("rest-timer-label");
+  els.restTimerValue = document.getElementById("rest-timer-value");
+  els.restTimerToggle = document.getElementById("rest-timer-toggle");
+  els.restTimerToggleIcon = document.getElementById("rest-timer-toggle-icon");
   els.toast = document.getElementById("toast");
 }
 
@@ -499,6 +533,7 @@ function renderAll() {
   if (view === "log") renderHistory();
   if (view === "stats") renderStats();
   renderStorage();
+  renderRestTimer();
   refreshIcons();
 }
 
@@ -718,6 +753,8 @@ function selectCalendarDate(dateString) {
     return;
   }
 
+  stopRestTimer();
+  clearRestTimerCompletionTracking();
   state.activeDate = dateString;
   clearEditingHistoryIfActiveTargetChanged();
   getActiveWorkout();
@@ -1365,6 +1402,9 @@ function runAction(trigger) {
   if (action === "edit-setup") editSetup(trigger);
   if (action === "edit-exercise-name") editProgramExerciseName(trigger);
   if (action === "edit-name") editActivityName(trigger);
+  if (action === "rest-timer-toggle") toggleRestTimer();
+  if (action === "rest-timer-add") addRestTimerSeconds(30);
+  if (action === "rest-timer-dismiss") stopRestTimer();
   if (action === "complete-session") completeSession();
   if (action === "reset-current") resetCurrent();
   if (action === "reset-cycle") resetCycle();
@@ -1538,11 +1578,239 @@ function handleInput(event) {
   const set = row.dataset.side ? parentSet?.[row.dataset.side] : parentSet;
   if (!set) return;
 
+  const side = row.dataset.side || "";
+  const wasSetComplete = hasCompleteStrengthSet(parentSet, entry);
+  const wasSideComplete = side ? hasCompleteStrengthSide(parentSet?.[side], entry) : false;
+
   set[target.dataset.field] = normalizeInputValue(target);
+
+  const isSetComplete = hasCompleteStrengthSet(parentSet, entry);
+  const isSideComplete = side ? hasCompleteStrengthSide(parentSet?.[side], entry) : false;
+  const ref = getRefFromElement(row);
+  if (side && !wasSideComplete && isSideComplete && !isSetComplete) {
+    startSideRestTimer(entry, ref, Number(row.dataset.setIndex), side);
+  }
+  if (!wasSetComplete && isSetComplete) {
+    startSetRestTimer(entry, ref, Number(row.dataset.setIndex));
+  }
 
   updateEntrySummary(target, entry);
   updateTrainingProgressReadout();
   saveState();
+}
+
+function startSetRestTimer(entry, ref, setIndex) {
+  if (state.editingHistoryId) return;
+  const completionKey = getRestTimerCompletionKey(ref, setIndex, "set");
+  if (restTimer.completionKeys.has(completionKey)) return;
+  restTimer.completionKeys.add(completionKey);
+  startRestTimer(getEntryRestSeconds(entry), "Rust");
+}
+
+function startSideRestTimer(entry, ref, setIndex, side) {
+  if (state.editingHistoryId) return;
+  const completionKey = getRestTimerCompletionKey(ref, setIndex, side);
+  if (restTimer.completionKeys.has(completionKey)) return;
+  restTimer.completionKeys.add(completionKey);
+
+  const nextSide = side === "left" ? "R" : "L";
+  startRestTimer(REST_TIMER_SIDE_SECONDS, `${side === "left" ? "L" : "R"} -> ${nextSide}`);
+}
+
+function getRestTimerCompletionKey(ref, setIndex, part) {
+  return [state.activeDate, state.activeSessionId, getRefKey(ref), setIndex, part].join("::");
+}
+
+function clearRestTimerCompletionTracking() {
+  restTimer.completionKeys.clear();
+}
+
+function getEntryRestSeconds(entry) {
+  const configured = Number(entry?.restSeconds);
+  if (Number.isFinite(configured) && configured > 0) return Math.round(configured);
+
+  const name = normalizeExerciseName(entry?.name);
+  return isLikelyCompoundExercise(name) ? REST_TIMER_COMPOUND_SECONDS : REST_TIMER_ISOLATION_SECONDS;
+}
+
+function isLikelyCompoundExercise(name) {
+  return /(bench|pull\s?ups?|weighted dips|deadlift|sissy squats|shoulder press|(^|\s)row|incline db press|db press)/.test(name);
+}
+
+function startRestTimer(seconds, label = "Rust") {
+  const duration = Math.max(1, Math.round(Number(seconds) || REST_TIMER_ISOLATION_SECONDS));
+  clearRestTimerInterval();
+  clearTimeout(restTimer.hideTimeout);
+  restTimer.active = true;
+  restTimer.status = "running";
+  restTimer.label = label;
+  restTimer.durationSeconds = duration;
+  restTimer.remainingSeconds = duration;
+  restTimer.endsAt = Date.now() + duration * 1000;
+  prepareRestTimerAudio();
+  renderRestTimer();
+  restTimer.interval = setInterval(tickRestTimer, REST_TIMER_TICK_MS);
+}
+
+function tickRestTimer() {
+  if (restTimer.status !== "running") return;
+  const remaining = getRestTimerRemainingSeconds();
+  if (remaining <= 0) {
+    finishRestTimer();
+    return;
+  }
+  if (remaining === restTimer.remainingSeconds) return;
+  restTimer.remainingSeconds = remaining;
+  renderRestTimer();
+}
+
+function getRestTimerRemainingSeconds() {
+  if (restTimer.status !== "running") return restTimer.remainingSeconds;
+  return Math.max(0, Math.ceil((restTimer.endsAt - Date.now()) / 1000));
+}
+
+function toggleRestTimer() {
+  if (!restTimer.active || restTimer.status === "done") {
+    stopRestTimer();
+    return;
+  }
+
+  if (restTimer.status === "running") {
+    restTimer.remainingSeconds = Math.max(1, getRestTimerRemainingSeconds());
+    restTimer.status = "paused";
+    clearRestTimerInterval();
+    renderRestTimer();
+    return;
+  }
+
+  restTimer.status = "running";
+  restTimer.endsAt = Date.now() + Math.max(1, restTimer.remainingSeconds) * 1000;
+  restTimer.interval = setInterval(tickRestTimer, REST_TIMER_TICK_MS);
+  prepareRestTimerAudio();
+  renderRestTimer();
+}
+
+function addRestTimerSeconds(seconds) {
+  if (!restTimer.active || restTimer.status === "done") return;
+  const extra = Math.max(1, Math.round(Number(seconds) || 0));
+  const remaining = Math.max(1, getRestTimerRemainingSeconds()) + extra;
+  restTimer.remainingSeconds = remaining;
+  restTimer.durationSeconds += extra;
+  if (restTimer.status === "running") restTimer.endsAt = Date.now() + remaining * 1000;
+  renderRestTimer();
+}
+
+function finishRestTimer() {
+  clearRestTimerInterval();
+  restTimer.status = "done";
+  restTimer.label = "Klaar";
+  restTimer.remainingSeconds = 0;
+  restTimer.endsAt = 0;
+  renderRestTimer();
+  playRestTimerSound();
+  clearTimeout(restTimer.hideTimeout);
+  restTimer.hideTimeout = setTimeout(stopRestTimer, REST_TIMER_DONE_VISIBLE_MS);
+}
+
+function stopRestTimer() {
+  clearRestTimerInterval();
+  clearTimeout(restTimer.hideTimeout);
+  restTimer.hideTimeout = null;
+  restTimer.active = false;
+  restTimer.status = "idle";
+  restTimer.label = "Rust";
+  restTimer.durationSeconds = 0;
+  restTimer.remainingSeconds = 0;
+  restTimer.endsAt = 0;
+  renderRestTimer();
+}
+
+function clearRestTimerInterval() {
+  clearInterval(restTimer.interval);
+  restTimer.interval = null;
+}
+
+function renderRestTimer() {
+  if (!els.restTimer) return;
+  const visible = restTimer.active;
+  els.restTimer.dataset.state = restTimer.status;
+  els.restTimer.hidden = !visible;
+  document.body.classList.toggle("has-rest-timer", visible);
+  if (!visible) return;
+
+  const icon = restTimer.status === "running" ? "pause" : restTimer.status === "paused" ? "play" : "check";
+  if (els.restTimerToggleIcon?.dataset.icon !== icon) {
+    els.restTimerToggleIcon.dataset.icon = icon;
+    els.restTimerToggleIcon.innerHTML = `<i data-lucide="${icon}"></i>`;
+    refreshIcons();
+  }
+
+  const progress = restTimer.durationSeconds
+    ? Math.min(100, Math.max(0, ((restTimer.durationSeconds - restTimer.remainingSeconds) / restTimer.durationSeconds) * 100))
+    : 0;
+  const toggleLabel = restTimer.status === "running"
+    ? "Pauzeer rusttimer"
+    : restTimer.status === "paused"
+      ? "Hervat rusttimer"
+      : "Sluit rusttimer";
+
+  els.restTimer.style.setProperty("--rest-timer-progress", `${progress}%`);
+  if (els.restTimerLabel) els.restTimerLabel.textContent = restTimer.label;
+  if (els.restTimerValue) els.restTimerValue.textContent = formatRestTimerSeconds(restTimer.remainingSeconds);
+  if (els.restTimerToggle) {
+    els.restTimerToggle.setAttribute("aria-label", toggleLabel);
+    els.restTimerToggle.setAttribute("title", toggleLabel);
+  }
+}
+
+function formatRestTimerSeconds(seconds) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0));
+  const minutes = Math.floor(total / 60);
+  return `${minutes}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function prepareRestTimerAudio() {
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) return;
+  if (!restTimer.audioContext || restTimer.audioContext.state === "closed") {
+    restTimer.audioContext = new AudioContext();
+  }
+  if (restTimer.audioContext.state === "suspended") {
+    restTimer.audioContext.resume().catch(() => {});
+  }
+}
+
+function playRestTimerSound() {
+  const context = restTimer.audioContext;
+  if (!context || context.state === "closed") return;
+
+  const play = () => {
+    const now = context.currentTime;
+    [
+      { frequency: 523.25, start: 0, duration: 0.14, type: "triangle", gain: 0.12 },
+      { frequency: 659.25, start: 0.13, duration: 0.17, type: "sine", gain: 0.13 },
+      { frequency: 880, start: 0.29, duration: 0.34, type: "sine", gain: 0.16 },
+    ].forEach((note) => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const start = now + note.start;
+      const end = start + note.duration;
+      oscillator.type = note.type;
+      oscillator.frequency.setValueAtTime(note.frequency, start);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(note.gain, start + 0.018);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start(start);
+      oscillator.stop(end + 0.03);
+    });
+  };
+
+  if (context.state === "suspended") {
+    context.resume().then(play).catch(() => {});
+  } else {
+    play();
+  }
 }
 
 function handleFocusOut(event) {
@@ -1564,6 +1832,8 @@ function handleFocusOut(event) {
 
 function handleChange(event) {
   if (event.target.id === "training-date") {
+    stopRestTimer();
+    clearRestTimerCompletionTracking();
     state.activeDate = event.target.value || today();
     clearEditingHistoryIfActiveTargetChanged();
     getActiveWorkout();
@@ -1586,8 +1856,10 @@ function handleChange(event) {
 function selectSession(sessionId) {
   const session = findSession(sessionId);
   if (!session) return;
+  stopRestTimer();
   state.activeSessionId = session.id;
   clearEditingHistoryIfActiveTargetChanged();
+  clearRestTimerCompletionTracking();
   getActiveWorkout();
   collapseExerciseCards();
   saveState();
@@ -1672,6 +1944,7 @@ function clearCustomCardExpansion() {
 function addSet(trigger) {
   const workout = getActiveWorkout();
   const entry = getEntryFromElement(workout, trigger);
+  clearRestTimerCompletionTracking();
   if (isMetricEntry(entry)) {
     entry.attempts ||= [];
     entry.attempts.push(makeMetricAttempt());
@@ -1691,6 +1964,7 @@ function addSet(trigger) {
 function removeLastSet(trigger) {
   const workout = getActiveWorkout();
   const entry = getEntryFromElement(workout, trigger);
+  clearRestTimerCompletionTracking();
   if (isMetricEntry(entry)) {
     entry.attempts ||= [];
     if (entry.attempts.length <= 0) return;
@@ -1800,6 +2074,9 @@ function completeSession() {
     return;
   }
 
+  stopRestTimer();
+  clearRestTimerCompletionTracking();
+
   const historyEntry = {
     id: "",
     date: workout.date,
@@ -1865,6 +2142,8 @@ function resetCurrent() {
 }
 
 function performResetCurrent() {
+  stopRestTimer();
+  clearRestTimerCompletionTracking();
   const sessionId = state.activeSessionId;
   const date = state.activeDate;
   const key = workoutKey(state.activeSessionId, state.activeDate);
@@ -1945,6 +2224,8 @@ function performResetCycle() {
 
 function resetAll() {
   if (!window.confirm("Alle lokale trackerdata wissen?")) return;
+  stopRestTimer();
+  clearRestTimerCompletionTracking();
   state = {};
   ensureDefaults();
   collapseExerciseCards();
@@ -1963,6 +2244,8 @@ function deleteHistoryForWorkout(sessionId, date) {
 function openHistory(historyId) {
   const entry = state.history.find((item) => item.id === historyId);
   if (!entry) return;
+  stopRestTimer();
+  clearRestTimerCompletionTracking();
   state.activeDate = entry.date;
   state.activeSessionId = entry.sessionId;
   state.editingHistoryId = entry.id;
@@ -2337,6 +2620,7 @@ function makeExerciseEntry(exercise) {
     name: getProgramExerciseName(exercise),
     setup: exercise.setup || "",
     note: "",
+    ...(Number.isFinite(Number(exercise.restSeconds)) ? { restSeconds: Number(exercise.restSeconds) } : {}),
     unilateral,
     usesBodyweight,
     bodyweight: usesBodyweight ? getDefaultBodyweight() : "",
@@ -2480,6 +2764,9 @@ function normalizeEntry(entry, exercise) {
     return entry;
   }
   entry.kind = "strength";
+  if (!Number.isFinite(Number(entry.restSeconds)) && Number.isFinite(Number(exercise?.restSeconds))) {
+    entry.restSeconds = Number(exercise.restSeconds);
+  }
   const unilateral = Boolean(entry.unilateral || exercise?.unilateral);
   const usesBodyweight = Boolean(entry.usesBodyweight || exercise?.usesBodyweight);
   entry.unilateral = unilateral;
