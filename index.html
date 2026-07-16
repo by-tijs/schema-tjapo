@@ -14,10 +14,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=133">
+  <link rel="stylesheet" href="styles.css?v=137">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=133" defer></script>
-  <script src="app.js?v=133" defer></script>
+  <script src="firebase-config.js?v=137" defer></script>
+  <script src="app.js?v=137" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -209,6 +209,9 @@
     </button>
   </div>
 
+  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=137" preload="auto" loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" src="side-alarm.mp3?v=137" preload="auto" playsinline aria-hidden="true"></audio>
+
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>
     <section class="rest-alarm-card" role="alertdialog" aria-modal="true" aria-labelledby="rest-alarm-title">
@@ -221,7 +224,7 @@
       </div>
       <button class="primary-button rest-alarm-action" type="button" data-action="rest-alarm-dismiss">
         <i data-lucide="dumbbell"></i>
-        <span>Start set</span>
+        <span id="rest-alarm-action-label">Start set</span>
       </button>
     </section>
   </div>

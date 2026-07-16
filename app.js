@@ -6,6 +6,8 @@ const REST_TIMER_ISOLATION_SECONDS = 3 * 60;
 const REST_TIMER_SIDE_SECONDS = 30;
 const REST_TIMER_TICK_MS = 250;
 const REST_TIMER_ALARM_REPEAT_MS = 3600;
+const REST_TIMER_ALARM_SET = "set";
+const REST_TIMER_ALARM_SIDE = "side";
 
 const sessions = [
   {
@@ -183,7 +185,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "133";
+const APP_VERSION = "137";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -259,16 +261,20 @@ const cloudSync = {
 const restTimer = {
   active: false,
   status: "idle",
+  alarmKind: REST_TIMER_ALARM_SET,
   durationSeconds: 0,
   remainingSeconds: 0,
   endsAt: 0,
   interval: null,
   alarmInterval: null,
   alarmHideTimeout: null,
+  alarmFallbackActive: false,
+  alarmPlaybackPending: false,
+  alarmSequence: 0,
+  alarmMedia: null,
   audioContext: null,
-  alarmBuffer: null,
-  alarmBufferPromise: null,
-  alarmSource: null,
+  audioUnlocked: false,
+  mediaPrimeIndex: 0,
   completionKeys: new Set(),
 };
 
@@ -386,6 +392,10 @@ function bindElements() {
   els.restTimerValue = document.getElementById("rest-timer-value");
   els.restTimerPause = document.getElementById("rest-timer-pause");
   els.restAlarm = document.getElementById("rest-alarm");
+  els.restAlarmTitle = document.getElementById("rest-alarm-title");
+  els.restAlarmActionLabel = document.getElementById("rest-alarm-action-label");
+  els.restAlarmAudio = document.getElementById("rest-alarm-audio");
+  els.sideAlarmAudio = document.getElementById("side-alarm-audio");
   els.toast = document.getElementById("toast");
 }
 
@@ -395,6 +405,10 @@ function installListeners() {
   document.body.addEventListener("change", handleChange);
   document.body.addEventListener("focusout", handleFocusOut);
   document.addEventListener("keydown", handleKeydown);
+  document.addEventListener("pointerdown", unlockRestTimerAudio, { capture: true, passive: true });
+  document.addEventListener("click", unlockRestTimerAudio, true);
+  document.addEventListener("touchend", unlockRestTimerAudio, { capture: true, passive: true });
+  document.addEventListener("keydown", unlockRestTimerAudio, true);
   els.sessionRail?.addEventListener("pointerdown", handleSessionRailPointerDown);
   els.sessionRail?.addEventListener("pointermove", handleSessionRailPointerMove);
   els.sessionRail?.addEventListener("pointerup", handleSessionRailPointerEnd);
@@ -414,8 +428,13 @@ function installListeners() {
   window.addEventListener("beforeunload", flushStateSave);
   window.addEventListener("pagehide", flushStateSave);
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") flushStateSave();
+    if (document.visibilityState === "hidden") {
+      flushStateSave();
+    } else {
+      recoverRestTimerAudio();
+    }
   });
+  window.addEventListener("pageshow", recoverRestTimerAudio);
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
@@ -1608,7 +1627,7 @@ function startSetRestTimer(entry, ref, setIndex) {
   const completionKey = getRestTimerCompletionKey(ref, setIndex, "set");
   if (restTimer.completionKeys.has(completionKey)) return;
   restTimer.completionKeys.add(completionKey);
-  startRestTimer(getEntryRestSeconds(entry));
+  startRestTimer(getEntryRestSeconds(entry), REST_TIMER_ALARM_SET);
 }
 
 function startSideRestTimer(entry, ref, setIndex, side) {
@@ -1617,7 +1636,7 @@ function startSideRestTimer(entry, ref, setIndex, side) {
   if (restTimer.completionKeys.has(completionKey)) return;
   restTimer.completionKeys.add(completionKey);
 
-  startRestTimer(REST_TIMER_SIDE_SECONDS);
+  startRestTimer(REST_TIMER_SIDE_SECONDS, REST_TIMER_ALARM_SIDE);
 }
 
 function getRestTimerCompletionKey(ref, setIndex, part) {
@@ -1640,12 +1659,13 @@ function isLikelyCompoundExercise(name) {
   return /(bench|pull\s?ups?|weighted dips|deadlift|sissy squats|shoulder press|(^|\s)row|incline db press|db press)/.test(name);
 }
 
-function startRestTimer(seconds) {
+function startRestTimer(seconds, alarmKind = REST_TIMER_ALARM_SET) {
   const duration = Math.max(1, Math.round(Number(seconds) || REST_TIMER_ISOLATION_SECONDS));
   clearRestTimerInterval();
   clearRestTimerAlarm();
   restTimer.active = true;
   restTimer.status = "running";
+  restTimer.alarmKind = alarmKind === REST_TIMER_ALARM_SIDE ? REST_TIMER_ALARM_SIDE : REST_TIMER_ALARM_SET;
   restTimer.durationSeconds = duration;
   restTimer.remainingSeconds = duration;
   restTimer.endsAt = Date.now() + duration * 1000;
@@ -1723,6 +1743,7 @@ function stopRestTimer() {
   restTimer.durationSeconds = 0;
   restTimer.remainingSeconds = 0;
   restTimer.endsAt = 0;
+  restTimer.alarmKind = REST_TIMER_ALARM_SET;
   renderRestTimer();
 }
 
@@ -1734,10 +1755,17 @@ function clearRestTimerInterval() {
 function openRestTimerAlarm() {
   clearInterval(restTimer.alarmInterval);
   restTimer.alarmInterval = null;
+  restTimer.alarmFallbackActive = false;
   clearTimeout(restTimer.alarmHideTimeout);
   restTimer.alarmHideTimeout = null;
 
   if (els.restAlarm) {
+    const sideChange = restTimer.alarmKind === REST_TIMER_ALARM_SIDE;
+    els.restAlarm.dataset.kind = restTimer.alarmKind;
+    delete els.restAlarm.dataset.mediaError;
+    delete els.restAlarm.dataset.playback;
+    if (els.restAlarmTitle) els.restAlarmTitle.textContent = sideChange ? "Andere kant." : "Volgende set.";
+    if (els.restAlarmActionLabel) els.restAlarmActionLabel.textContent = sideChange ? "Start andere kant" : "Start set";
     els.restAlarm.hidden = false;
     requestAnimationFrame(() => {
       els.restAlarm.classList.add("is-visible");
@@ -1753,20 +1781,19 @@ function openRestTimerAlarm() {
 function clearRestTimerAlarm() {
   clearInterval(restTimer.alarmInterval);
   restTimer.alarmInterval = null;
-  if (restTimer.alarmSource) {
-    const source = restTimer.alarmSource;
-    restTimer.alarmSource = null;
-    source.onended = null;
-    try {
-      source.stop();
-      source.disconnect();
-    } catch {}
-  }
+  restTimer.alarmFallbackActive = false;
+  restTimer.alarmPlaybackPending = false;
+  restTimer.alarmSequence += 1;
+  restTimer.alarmMedia = null;
+  stopRestTimerMediaElement(els.restAlarmAudio);
+  stopRestTimerMediaElement(els.sideAlarmAudio);
   clearTimeout(restTimer.alarmHideTimeout);
   restTimer.alarmHideTimeout = null;
   navigator.vibrate?.(0);
 
   if (!els.restAlarm || els.restAlarm.hidden) return;
+  delete els.restAlarm.dataset.playback;
+  delete els.restAlarm.dataset.mediaError;
   els.restAlarm.classList.remove("is-visible");
   restTimer.alarmHideTimeout = setTimeout(() => {
     els.restAlarm.hidden = true;
@@ -1808,134 +1835,250 @@ function formatRestTimerSeconds(seconds) {
   return `${minutes}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function prepareRestTimerAudio() {
+function ensureRestTimerAudioContext() {
   const AudioContext = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContext) return;
+  if (!AudioContext) return null;
   if (!restTimer.audioContext || restTimer.audioContext.state === "closed") {
     restTimer.audioContext = new AudioContext();
+    restTimer.audioUnlocked = false;
   }
-  if (restTimer.audioContext.state === "suspended") {
-    restTimer.audioContext.resume().catch(() => {});
+  return restTimer.audioContext;
+}
+
+function prepareRestTimerAudio() {
+  [els.restAlarmAudio, els.sideAlarmAudio].forEach((audio) => {
+    if (!audio || audio.dataset.prepared === "true") return;
+    audio.dataset.prepared = "true";
+    audio.load();
+  });
+  return ensureRestTimerAudioContext();
+}
+
+function unlockRestTimerAudio() {
+  const context = prepareRestTimerAudio();
+  primeNextRestTimerMediaElement();
+  if (!context || (restTimer.audioUnlocked && context.state === "running")) return;
+
+  try {
+    const source = context.createBufferSource();
+    source.buffer = context.createBuffer(1, 1, 22050);
+    source.connect(context.destination);
+    source.onended = () => source.disconnect();
+    source.start(0);
+  } catch {}
+
+  const markUnlocked = () => {
+    restTimer.audioUnlocked = context.state === "running";
+  };
+  if (context.state === "running") {
+    markUnlocked();
+  } else {
+    context.resume().then(markUnlocked).catch(() => {
+      restTimer.audioUnlocked = false;
+    });
+  }
+}
+
+function primeNextRestTimerMediaElement() {
+  const media = [els.restAlarmAudio, els.sideAlarmAudio].filter(Boolean);
+  if (media.some((audio) => audio.dataset.unlocking === "true")) return;
+  const locked = media.filter((audio) => audio.dataset.unlocked !== "true");
+  if (!locked.length) return;
+  const next = locked[restTimer.mediaPrimeIndex % locked.length];
+  restTimer.mediaPrimeIndex += 1;
+  if (next) primeRestTimerMediaElement(next);
+}
+
+function primeRestTimerMediaElement(audio) {
+  if (!audio || audio.dataset.unlocked === "true" || audio.dataset.unlocking === "true") return;
+  audio.dataset.unlocking = "true";
+  const source = audio.getAttribute("src");
+  const wasLooping = audio.loop;
+  const wasMuted = audio.muted;
+  audio.loop = false;
+  audio.muted = false;
+  audio.setAttribute("src", `audio-unlock.mp3?v=${APP_VERSION}`);
+  audio.load();
+
+  const finish = (unlocked, error) => {
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {}
+    audio.loop = wasLooping;
+    audio.muted = wasMuted;
+    audio.setAttribute("src", source);
+    audio.load();
+    delete audio.dataset.unlocking;
+    if (unlocked) {
+      audio.dataset.unlocked = "true";
+      delete audio.dataset.unlockError;
+    } else if (error) {
+      audio.dataset.unlockError = error.name || "PlaybackError";
+    }
+  };
+
+  try {
+    const playback = audio.play();
+    if (playback?.then) {
+      playback
+        .then(() => setTimeout(() => finish(true), 60))
+        .catch((error) => finish(false, error));
+    } else {
+      setTimeout(() => finish(true), 60);
+    }
+  } catch (error) {
+    finish(false, error);
+  }
+}
+
+function recoverRestTimerAudio() {
+  const context = restTimer.audioContext;
+  if (context && context.state !== "closed" && context.state !== "running") {
+    context.resume().then(() => {
+      restTimer.audioUnlocked = context.state === "running";
+    }).catch(() => {
+      restTimer.audioUnlocked = false;
+    });
   }
 
-  if (!restTimer.alarmBuffer && !restTimer.alarmBufferPromise) {
-    restTimer.alarmBufferPromise = fetch(`rest-alarm.mp3?v=${APP_VERSION}`, { cache: "force-cache" })
-      .then((response) => {
-        if (!response.ok) throw new Error("Alarm audio kon niet worden geladen.");
-        return response.arrayBuffer();
-      })
-      .then((data) => restTimer.audioContext.decodeAudioData(data))
-      .then((buffer) => {
-        restTimer.alarmBuffer = buffer;
-        return buffer;
-      })
-      .catch(() => null)
-      .finally(() => {
-        if (!restTimer.alarmBuffer) restTimer.alarmBufferPromise = null;
-      });
+  if (restTimer.status === "done" && (!restTimer.alarmMedia || restTimer.alarmMedia.paused)) {
+    playRestTimerAlarm();
   }
 }
 
 function playRestTimerAlarm() {
-  if (restTimer.status !== "done") return;
-  const context = restTimer.audioContext;
-  if (!context || context.state === "closed") {
+  if (restTimer.status !== "done" || restTimer.alarmPlaybackPending) return;
+  if (restTimer.alarmMedia && !restTimer.alarmMedia.paused) return;
+
+  const sideChange = restTimer.alarmKind === REST_TIMER_ALARM_SIDE;
+  const audio = sideChange ? els.sideAlarmAudio : els.restAlarmAudio;
+  if (!audio) {
     startRestTimerFallbackAlarm();
     return;
   }
 
-  const play = () => {
-    if (restTimer.status !== "done") return;
-    if (restTimer.alarmBuffer) {
-      startRestTimerTrack(restTimer.alarmBuffer);
+  const sequence = restTimer.alarmSequence;
+  restTimer.alarmPlaybackPending = true;
+  restTimer.alarmMedia = audio;
+  stopRestTimerMediaElement(sideChange ? els.restAlarmAudio : els.sideAlarmAudio);
+  audio.loop = !sideChange;
+  audio.muted = false;
+  audio.volume = sideChange ? 0.9 : 1;
+  try {
+    audio.currentTime = 0;
+  } catch {}
+
+  const started = () => {
+    if (sequence !== restTimer.alarmSequence || restTimer.status !== "done") {
+      stopRestTimerMediaElement(audio);
       return;
     }
-    if (restTimer.alarmBufferPromise) {
-      restTimer.alarmBufferPromise.then((buffer) => {
-        if (buffer) startRestTimerTrack(buffer);
-        else startRestTimerFallbackAlarm();
-      });
-      return;
-    }
+    restTimer.alarmPlaybackPending = false;
+    if (els.restAlarm) els.restAlarm.dataset.playback = "media";
+    navigator.vibrate?.(sideChange ? [70, 55, 120] : [80, 65, 80, 65, 180]);
+  };
+  const failed = (error) => {
+    if (sequence !== restTimer.alarmSequence || restTimer.status !== "done") return;
+    restTimer.alarmPlaybackPending = false;
+    restTimer.alarmMedia = null;
+    if (els.restAlarm) els.restAlarm.dataset.mediaError = error?.name || "PlaybackError";
     startRestTimerFallbackAlarm();
   };
 
-  if (context.state === "suspended") {
-    context.resume().then(play).catch(startRestTimerFallbackAlarm);
-  } else {
-    play();
+  try {
+    const playback = audio.play();
+    if (playback?.then) playback.then(started).catch(failed);
+    else started();
+  } catch (error) {
+    failed(error);
   }
 }
 
-function startRestTimerTrack(buffer) {
-  if (restTimer.status !== "done" || restTimer.alarmSource) return;
-  const context = restTimer.audioContext;
-  if (!context || context.state === "closed") {
-    startRestTimerFallbackAlarm();
-    return;
-  }
-
-  const source = context.createBufferSource();
-  const gain = context.createGain();
-  source.buffer = buffer;
-  source.loop = true;
-  gain.gain.setValueAtTime(0.82, context.currentTime);
-  source.connect(gain).connect(context.destination);
-  source.onended = () => {
-    if (restTimer.alarmSource === source) restTimer.alarmSource = null;
-  };
-  restTimer.alarmSource = source;
-  source.start();
-  navigator.vibrate?.([80, 65, 80, 65, 180]);
+function stopRestTimerMediaElement(audio) {
+  if (!audio) return;
+  audio.pause();
+  try {
+    audio.currentTime = 0;
+  } catch {}
 }
 
 function startRestTimerFallbackAlarm() {
-  if (restTimer.status !== "done" || restTimer.alarmInterval || restTimer.alarmSource) return;
-  playRestTimerFallbackSound();
-  restTimer.alarmInterval = setInterval(playRestTimerFallbackSound, REST_TIMER_ALARM_REPEAT_MS);
+  if (restTimer.status !== "done" || restTimer.alarmFallbackActive) return;
+  const context = ensureRestTimerAudioContext();
+  if (!context || context.state === "closed") {
+    if (els.restAlarm) els.restAlarm.dataset.playback = "blocked";
+    return;
+  }
+
+  const start = () => {
+    if (restTimer.status !== "done" || restTimer.alarmFallbackActive || context.state !== "running") return;
+    restTimer.alarmFallbackActive = true;
+    if (els.restAlarm) els.restAlarm.dataset.playback = "fallback";
+    playRestTimerFallbackSound();
+    if (restTimer.alarmKind === REST_TIMER_ALARM_SET) {
+      restTimer.alarmInterval = setInterval(playRestTimerFallbackSound, REST_TIMER_ALARM_REPEAT_MS);
+    }
+  };
+
+  if (context.state === "running") {
+    start();
+  } else {
+    context.resume().then(start).catch(() => {
+      if (els.restAlarm) els.restAlarm.dataset.playback = "blocked";
+    });
+  }
 }
 
 function playRestTimerFallbackSound() {
   if (restTimer.status !== "done") return;
   const context = restTimer.audioContext;
   if (!context || context.state !== "running") return;
-  const now = context.currentTime;
-    [
+  const sideChange = restTimer.alarmKind === REST_TIMER_ALARM_SIDE;
+  const notes = sideChange
+    ? [
+      { frequency: 523.25, start: 0, duration: 0.13, gain: 0.11, accent: false },
+      { frequency: 783.99, start: 0.15, duration: 0.3, gain: 0.13, accent: true },
+    ]
+    : [
       { frequency: 554.37, start: 0, duration: 0.11, gain: 0.085, accent: false },
       { frequency: 659.25, start: 0.15, duration: 0.11, gain: 0.085, accent: false },
       { frequency: 739.99, start: 0.3, duration: 0.11, gain: 0.085, accent: false },
       { frequency: 659.25, start: 0.45, duration: 0.11, gain: 0.085, accent: false },
       { frequency: 880, start: 0.67, duration: 0.28, gain: 0.115, accent: true },
-    ].forEach((note) => {
-      const lead = context.createOscillator();
-      const leadGain = context.createGain();
-      const kick = context.createOscillator();
-      const kickGain = context.createGain();
-      const start = now + note.start;
-      const end = start + note.duration;
+    ];
+  const now = context.currentTime;
 
-      lead.type = "square";
-      lead.frequency.setValueAtTime(note.frequency, start);
-      lead.frequency.exponentialRampToValueAtTime(note.frequency * 0.975, end);
-      leadGain.gain.setValueAtTime(0.0001, start);
-      leadGain.gain.exponentialRampToValueAtTime(note.gain, start + 0.012);
-      leadGain.gain.exponentialRampToValueAtTime(0.0001, end);
-      lead.connect(leadGain).connect(context.destination);
-      lead.start(start);
-      lead.stop(end + 0.03);
+  notes.forEach((note) => {
+    const lead = context.createOscillator();
+    const leadGain = context.createGain();
+    const kick = context.createOscillator();
+    const kickGain = context.createGain();
+    const start = now + note.start;
+    const end = start + note.duration;
 
-      const kickEnd = start + Math.min(note.duration, note.accent ? 0.18 : 0.12);
-      kick.type = "sine";
-      kick.frequency.setValueAtTime(note.accent ? 128 : 108, start);
-      kick.frequency.exponentialRampToValueAtTime(48, kickEnd);
-      kickGain.gain.setValueAtTime(0.0001, start);
-      kickGain.gain.exponentialRampToValueAtTime(note.accent ? 0.09 : 0.058, start + 0.008);
-      kickGain.gain.exponentialRampToValueAtTime(0.0001, kickEnd);
-      kick.connect(kickGain).connect(context.destination);
-      kick.start(start);
-      kick.stop(kickEnd + 0.03);
-    });
-  navigator.vibrate?.([55, 70, 55, 70, 55, 70, 55, 115, 180]);
+    lead.type = "square";
+    lead.frequency.setValueAtTime(note.frequency, start);
+    lead.frequency.exponentialRampToValueAtTime(note.frequency * 0.975, end);
+    leadGain.gain.setValueAtTime(0.0001, start);
+    leadGain.gain.exponentialRampToValueAtTime(note.gain, start + 0.012);
+    leadGain.gain.exponentialRampToValueAtTime(0.0001, end);
+    lead.connect(leadGain).connect(context.destination);
+    lead.start(start);
+    lead.stop(end + 0.03);
+
+    const kickEnd = start + Math.min(note.duration, note.accent ? 0.18 : 0.12);
+    kick.type = "sine";
+    kick.frequency.setValueAtTime(note.accent ? 128 : 108, start);
+    kick.frequency.exponentialRampToValueAtTime(48, kickEnd);
+    kickGain.gain.setValueAtTime(0.0001, start);
+    kickGain.gain.exponentialRampToValueAtTime(note.accent ? 0.09 : 0.058, start + 0.008);
+    kickGain.gain.exponentialRampToValueAtTime(0.0001, kickEnd);
+    kick.connect(kickGain).connect(context.destination);
+    kick.start(start);
+    kick.stop(kickEnd + 0.03);
+  });
+  navigator.vibrate?.(sideChange ? [70, 55, 120] : [55, 70, 55, 70, 55, 70, 55, 115, 180]);
 }
 
 function handleFocusOut(event) {
