@@ -257,7 +257,8 @@ body.has-rest-timer .app-shell {
 
 .rest-timer-divider {
   width: 1px;
-  height: 22px;
+  height: auto;
+  align-self: stretch;
   background: var(--line);
 }
 
