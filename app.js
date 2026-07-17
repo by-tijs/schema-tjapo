@@ -55,7 +55,7 @@ const sessions = [
     exercises: [
       compound("slow-eccentric-bench", "Slow eccentric bench", 3, "16"),
       compoundUnilateral("illiac-row", "Illiac row", 2, "hoogste"),
-      compound("weighted-dips", "Weighted dips", 2, "17"),
+      compoundBodyweight("weighted-dips", "Weighted dips", 2, "17"),
       ex("seated-db-side-delts", "Seated db side delts", 2),
       ex("cable-bar-reverse-curls", "Cable bar reverse curls", 2),
       ex("rope-pushdown", "Rope pushdown", 2, "hoogste"),
@@ -208,7 +208,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "141";
+const APP_VERSION = "142";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -379,7 +379,8 @@ function setProgramExerciseName(exerciseId, value) {
 function init() {
   bindElements();
   installListeners();
-  ensureDefaults();
+  const migrated = ensureDefaults();
+  if (migrated) flushStateSave();
   renderAll();
   registerServiceWorker();
   initCloudSync();
@@ -498,12 +499,34 @@ function ensureDefaults() {
   if (!Array.isArray(state.history)) state.history = [];
   if (!state.exerciseNames || Array.isArray(state.exerciseNames) || typeof state.exerciseNames !== "object") state.exerciseNames = {};
   if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = String(DEFAULT_BODYWEIGHT_KG);
+  const migrated = migrateWeightedDipsBodyweight();
   if (state.editingHistoryId && !state.history.some((entry) => entry.id === state.editingHistoryId)) state.editingHistoryId = null;
   if (!CHART_GROUPS.includes(state.chartGroup)) state.chartGroup = "Upper";
   if (!getChartFilters(state.chartGroup).some((filter) => filter.value === state.chartFilter)) state.chartFilter = "all";
   if (!state.chartMetric) state.chartMetric = getDefaultChartMetric(state.chartGroup);
   state.statsRangeDays = getStatsRangeDays(state.statsRangeDays);
   syncViewFromHash();
+  return migrated;
+}
+
+function migrateWeightedDipsBodyweight() {
+  let changed = false;
+  const migrateWorkout = (workout) => {
+    const entry = workout?.exercises?.["weighted-dips"];
+    if (!entry) return;
+    if (!entry.usesBodyweight) {
+      entry.usesBodyweight = true;
+      changed = true;
+    }
+    if (!Number.isFinite(parseNumber(entry.bodyweight)) || parseNumber(entry.bodyweight) <= 0) {
+      entry.bodyweight = String(DEFAULT_BODYWEIGHT_KG);
+      changed = true;
+    }
+  };
+
+  Object.values(state.workouts || {}).forEach(migrateWorkout);
+  (state.history || []).forEach((historyEntry) => migrateWorkout(historyEntry?.workout));
+  return changed;
 }
 
 function loadState() {
@@ -3001,11 +3024,15 @@ async function uploadCloudState(showSyncedToast = false) {
 function applyRemoteState(remoteState, remoteUpdatedAt = "") {
   cloudSync.applyingRemote = true;
   state = structuredCloneSafe(remoteState);
-  ensureDefaults();
+  const migrated = ensureDefaults();
   stateDirty = false;
   flushStateSave();
   stateDirty = false;
   cloudSync.applyingRemote = false;
+  if (migrated) {
+    stateDirty = true;
+    flushStateSave();
+  }
   cloudSync.lastSyncedAt = remoteUpdatedAt || new Date().toISOString();
   cloudSync.status = "Cloud geladen.";
   collapseExerciseCards();
