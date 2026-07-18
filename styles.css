@@ -1310,6 +1310,20 @@ h1 {
   font-size: 0.86rem;
 }
 
+.record-result {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  text-align: right;
+}
+
+.strength-level {
+  color: var(--text-dim);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
 .history-summary {
   display: flex;
   flex-wrap: wrap;

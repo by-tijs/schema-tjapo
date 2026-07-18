@@ -210,11 +210,45 @@ const WEIGHT_DEPENDENT_E1RM_LOG_WEIGHT_COEFFICIENT = 4.58;
 const MIN_E1RM_CONVERSION_FACTOR = 4.58;
 const TAIL_SET_WEIGHT_DECAY = 0.67;
 const DEFAULT_BODYWEIGHT_KG = 94;
+const STRENGTH_STANDARD_REFERENCE_BODYWEIGHT_KG = 95;
+const STRENGTH_STANDARD_ALLOMETRIC_EXPONENT = 0.67;
+// e1RM is an estimate; this prevents rounding noise at a tier boundary from flipping the label.
+const STRENGTH_STANDARD_BOUNDARY_TOLERANCE = 0.985;
+const STRENGTH_STANDARD_LEVELS = Object.freeze([
+  ["Novice", "novice"],
+  ["Intermediate", "intermediate"],
+  ["Advanced", "advanced"],
+  ["Elite", "elite"],
+]);
+const STRENGTH_STANDARD_PROFILES = Object.freeze({
+  bench: { novice: 90, intermediate: 115, advanced: 143, elite: 172 },
+  deadlift: { novice: 141, intermediate: 180, advanced: 224, elite: 270 },
+  dumbbellBench: { novice: 34, intermediate: 46, advanced: 61, elite: 76 },
+  inclineDumbbellBench: { novice: 35, intermediate: 46, advanced: 58, elite: 71 },
+  dumbbellShoulderPress: { novice: 27, intermediate: 37, advanced: 48, elite: 61 },
+  dumbbellCurl: { novice: 16, intermediate: 25, advanced: 35, elite: 47 },
+  inclineDumbbellCurl: { novice: 17, intermediate: 22, advanced: 29, elite: 37 },
+  pullUps: { novice: 15, intermediate: 36, advanced: 58, elite: 81, addedBodyweight: true },
+  dips: { novice: 31, intermediate: 59, advanced: 90, elite: 122, addedBodyweight: true },
+});
+const EXERCISE_STRENGTH_STANDARD_PROFILE = Object.freeze({
+  "paused-bench": "bench",
+  "paused-bench-c": "bench",
+  "barbell-bench": "bench",
+  "weighted-pull-ups": "pullUps",
+  "weighted-dips": "dips",
+  "db-incline-curls": "inclineDumbbellCurl",
+  "supinated-db-bicep-curls": "dumbbellCurl",
+  deadlift: "deadlift",
+  "db-shoulder-press": "dumbbellShoulderPress",
+  "incline-db-press": "inclineDumbbellBench",
+  "db-press": "dumbbellBench",
+});
 const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "143";
+const APP_VERSION = "144";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -4248,7 +4282,10 @@ function renderRecordItem(record) {
         <div class="record-title">${escapeHtml(record.name)}</div>
         <div class="record-meta">${escapeHtml(record.summary)} - ${formatDate(record.date)}</div>
       </div>
-      <span class="panel-label">${formatNumber(record.score)} e1RM</span>
+      <div class="record-result">
+        <span class="panel-label">${formatNumber(record.score)} e1RM</span>
+        ${record.strengthLevel ? `<span class="strength-level">${escapeHtml(record.strengthLevel)}</span>` : ""}
+      </div>
     </div>
   `;
 }
@@ -4322,6 +4359,7 @@ function getStrengthRecords(group, filter, rangeDays = getStatsRangeDays()) {
             score,
             summary: getExerciseFirstSetSummary(entry),
             date: historyEntry.date,
+            strengthLevel: getExerciseStrengthLevel(exercise.id, score, getEntryBodyweight(entry)),
           });
         }
       });
@@ -4497,12 +4535,17 @@ function getTrendPoints(group, metric, filter = "all", rangeDays = getStatsRange
   return getStatsHistoryAsc(rangeDays)
     .filter((entry) => entry.sessionGroup === group && entry.workout)
     .map((entry) => {
-      const value = getExerciseTrendValue(entry, metric.replace("exercise:", ""));
-      if (value === null) return null;
+      const measurement = getExerciseTrendMeasurement(entry, metric.replace("exercise:", ""));
+      if (!measurement) return null;
       return {
         date: entry.date,
         label: entry.sessionLabel,
-        value,
+        value: measurement.value,
+        strengthLevel: getExerciseStrengthLevel(
+          measurement.exerciseId,
+          measurement.value,
+          measurement.bodyweight,
+        ),
       };
     })
     .filter(Boolean);
@@ -4580,7 +4623,7 @@ function getRunTrendPoints(metric, rangeDays = getStatsRangeDays()) {
       .filter(Boolean));
 }
 
-function getExerciseTrendValue(historyEntry, exerciseKey) {
+function getExerciseTrendMeasurement(historyEntry, exerciseKey) {
   const session = findSession(historyEntry.sessionId);
   const workout = historyEntry.workout;
   if (!session || !workout) return null;
@@ -4591,7 +4634,13 @@ function getExerciseTrendValue(historyEntry, exerciseKey) {
     const name = entry?.name || getProgramExerciseName(exercise);
     if (getStrengthActivityKey(name, entry?.setup ?? exercise.setup) !== exerciseKey) return;
     const value = getExerciseFirstSetE1rm(entry);
-    if (value !== null && (best === null || value > best)) best = value;
+    if (value !== null && (!best || value > best.value)) {
+      best = {
+        value,
+        exerciseId: exercise.id,
+        bodyweight: getEntryBodyweight(entry),
+      };
+    }
   });
   return best;
 }
@@ -4806,6 +4855,30 @@ function getLegacyHybridOneRepMax(weight, effectiveReps) {
   return trimmed.reduce((sum, value) => sum + value, 0) / trimmed.length;
 }
 
+function getExerciseStrengthLevel(exerciseId, estimatedOneRepMax, bodyweight = getEntryBodyweight()) {
+  const profileName = EXERCISE_STRENGTH_STANDARD_PROFILE[exerciseId];
+  const profile = STRENGTH_STANDARD_PROFILES[profileName];
+  const normalizedBodyweight = Number.isFinite(bodyweight) && bodyweight > 0
+    ? bodyweight
+    : DEFAULT_BODYWEIGHT_KG;
+  if (!profile || !Number.isFinite(estimatedOneRepMax) || estimatedOneRepMax <= 0) return "";
+
+  const comparableLoad = profile.addedBodyweight
+    ? estimatedOneRepMax - normalizedBodyweight
+    : estimatedOneRepMax;
+  const bodyweightScale = Math.pow(
+    normalizedBodyweight / STRENGTH_STANDARD_REFERENCE_BODYWEIGHT_KG,
+    STRENGTH_STANDARD_ALLOMETRIC_EXPONENT,
+  );
+
+  let level = "Beginner";
+  STRENGTH_STANDARD_LEVELS.forEach(([label, key]) => {
+    const threshold = profile[key] * bodyweightScale * STRENGTH_STANDARD_BOUNDARY_TOLERANCE;
+    if (comparableLoad >= threshold) level = label;
+  });
+  return level;
+}
+
 function formatRunRecordValue(run) {
   return [
     Number.isFinite(run.distance) && `${formatNumber(run.distance)} km`,
@@ -4861,7 +4934,10 @@ function renderChartReadout(points, metric) {
   const bestIsLatest = best.index === points.length - 1;
   const cards = [
     {
-      label: bestIsLatest && points.length > 1 ? "Nu / beste" : "Nu",
+      label: [
+        bestIsLatest && points.length > 1 ? "Nu / beste" : "Nu",
+        latest.strengthLevel,
+      ].filter(Boolean).join(" - "),
       value: formatChartValue(latest.value, metric),
       tone: bestIsLatest && points.length > 1 ? "is-up" : "",
     },
@@ -4877,7 +4953,10 @@ function renderChartReadout(points, metric) {
 
   if (points.length > 1 && !bestIsLatest) {
     cards.push({
-      label: `Beste - ${formatDateShort(best.point.date)}`,
+      label: [
+        `Beste - ${formatDateShort(best.point.date)}`,
+        best.point.strengthLevel,
+      ].filter(Boolean).join(" - "),
       value: formatChartValue(best.point.value, metric),
       tone: "is-best",
     });
