@@ -214,6 +214,8 @@ const STRENGTH_STANDARD_REFERENCE_BODYWEIGHT_KG = 95;
 const STRENGTH_STANDARD_ALLOMETRIC_EXPONENT = 0.67;
 // e1RM is an estimate; this prevents rounding noise at a tier boundary from flipping the label.
 const STRENGTH_STANDARD_BOUNDARY_TOLERANCE = 0.985;
+// A controlled 6-second eccentric reduced measured bench 1RM by 9.1% versus 2 seconds.
+const SLOW_ECCENTRIC_BENCH_STANDARD_FACTOR = 0.909;
 const STRENGTH_STANDARD_LEVELS = Object.freeze([
   ["Novice", "novice"],
   ["Intermediate", "intermediate"],
@@ -222,6 +224,12 @@ const STRENGTH_STANDARD_LEVELS = Object.freeze([
 ]);
 const STRENGTH_STANDARD_PROFILES = Object.freeze({
   bench: { novice: 90, intermediate: 115, advanced: 143, elite: 172 },
+  slowEccentricBench: {
+    novice: 90 * SLOW_ECCENTRIC_BENCH_STANDARD_FACTOR,
+    intermediate: 115 * SLOW_ECCENTRIC_BENCH_STANDARD_FACTOR,
+    advanced: 143 * SLOW_ECCENTRIC_BENCH_STANDARD_FACTOR,
+    elite: 172 * SLOW_ECCENTRIC_BENCH_STANDARD_FACTOR,
+  },
   deadlift: { novice: 141, intermediate: 180, advanced: 224, elite: 270 },
   dumbbellBench: { novice: 34, intermediate: 46, advanced: 61, elite: 76 },
   inclineDumbbellBench: { novice: 35, intermediate: 46, advanced: 58, elite: 71 },
@@ -235,6 +243,7 @@ const EXERCISE_STRENGTH_STANDARD_PROFILE = Object.freeze({
   "paused-bench": "bench",
   "paused-bench-c": "bench",
   "barbell-bench": "bench",
+  "slow-eccentric-bench": "slowEccentricBench",
   "weighted-pull-ups": "pullUps",
   "weighted-dips": "dips",
   "db-incline-curls": "inclineDumbbellCurl",
@@ -248,7 +257,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "144";
+const APP_VERSION = "145";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
