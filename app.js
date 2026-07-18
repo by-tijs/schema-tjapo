@@ -202,13 +202,19 @@ const CHART_FILTERS = {
 const MAX_EFFECTIVE_REPS_FOR_E1RM = 50;
 const MAX_RIR_FROM_RPE = 5;
 const MIN_RPE_FOR_E1RM = 6;
+// Weight-dependent near-failure model (Marzagao, 2026); input load is in kilograms.
+const WEIGHT_DEPENDENT_E1RM_REP_EXPONENT = 0.85;
+const WEIGHT_DEPENDENT_E1RM_INTERCEPT = -2.55;
+const WEIGHT_DEPENDENT_E1RM_LOG_WEIGHT_COEFFICIENT = 4.58;
+// Stabilize the sparsely observed sub-5kg range so adding load cannot lower e1RM.
+const MIN_E1RM_CONVERSION_FACTOR = 4.58;
 const TAIL_SET_WEIGHT_DECAY = 0.67;
 const DEFAULT_BODYWEIGHT_KG = 94;
 const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "142";
+const APP_VERSION = "143";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -4750,7 +4756,7 @@ function estimateOneRepMax(set, entry = {}) {
   ) return null;
 
   const effectiveReps = getEffectiveRepsForSet(set);
-  return getHybridOneRepMax(weight, effectiveReps);
+  return getWeightDependentOneRepMax(weight, effectiveReps);
 }
 
 function getEffectiveRepsForSet(set) {
@@ -4762,9 +4768,24 @@ function getEffectiveRepsForSet(set) {
   return Math.max(1, Math.min(MAX_EFFECTIVE_REPS_FOR_E1RM, reps + rir));
 }
 
-function getHybridOneRepMax(weight, effectiveReps) {
+function getWeightDependentOneRepMax(weight, effectiveReps) {
   if (effectiveReps <= 1.05) return weight;
 
+  const conversionFactor = Math.max(
+    MIN_E1RM_CONVERSION_FACTOR,
+    WEIGHT_DEPENDENT_E1RM_INTERCEPT + WEIGHT_DEPENDENT_E1RM_LOG_WEIGHT_COEFFICIENT * Math.log(weight),
+  );
+  const repTerm = Math.pow(
+    Math.max(0, effectiveReps - 1),
+    WEIGHT_DEPENDENT_E1RM_REP_EXPONENT,
+  );
+  const estimate = weight * (1 + repTerm / conversionFactor);
+  if (Number.isFinite(estimate) && estimate >= weight) return estimate;
+
+  return getLegacyHybridOneRepMax(weight, effectiveReps);
+}
+
+function getLegacyHybridOneRepMax(weight, effectiveReps) {
   const formulas = [
     weight * (1 + effectiveReps / 30), // Epley
     weight * (1 + 0.025 * effectiveReps), // O'Conner
