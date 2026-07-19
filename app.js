@@ -39,12 +39,12 @@ const sessions = [
     label: "Upper A",
     cycle: true,
     exercises: [
-      compound("paused-bench", "Paused Bench", 3, "16"),
       compoundBodyweight("weighted-pull-ups", "Weighted pull ups", 2),
       unilateral("single-cable-press", "Single cable press", 2, "-22"),
       unilateral("cuffed-laterial", "Cuffed Laterial", 2, "-25"),
       ex("db-incline-curls", "Db incline curls", 2),
       ex("jm-press", "JM press", 2, "hoogste"),
+      unilateral("smith-traps-upper-a", "Smith traps", 2),
     ],
   },
   {
@@ -53,12 +53,12 @@ const sessions = [
     label: "Upper B",
     cycle: true,
     exercises: [
-      compound("slow-eccentric-bench", "Slow eccentric bench", 3, "16"),
       compoundUnilateral("illiac-row", "Illiac row", 2, "hoogste"),
       compoundBodyweight("weighted-dips", "Weighted dips", 2, "17"),
       ex("seated-db-side-delts", "Seated db side delts", 2),
       ex("cable-bar-reverse-curls", "Cable bar reverse curls", 2),
       ex("rope-pushdown", "Rope pushdown", 2, "hoogste"),
+      unilateral("smith-traps-upper-b", "Smith traps", 2),
     ],
   },
   {
@@ -67,12 +67,12 @@ const sessions = [
     label: "Upper C",
     cycle: true,
     exercises: [
-      compound("paused-bench-c", "Paused bench", 3, "16"),
       compoundUnilateral("cable-single-row", "Cable single row", 2, "1 boven L"),
       compound("smith-incline-bench", "Smith incline bench", 2),
       unilateral("cuffed-laterial-c", "Cuffed Laterial", 2, "22"),
       unilateral("cable-preacher-curls", "Cable preacher curls", 2, "laagste"),
       ex("seated-bar-pushdowns", "Seated bar pushdowns", 2),
+      unilateral("smith-traps-upper-c", "Smith traps", 2),
     ],
   },
   {
@@ -81,12 +81,12 @@ const sessions = [
     label: "Upper D",
     cycle: false,
     exercises: [
-      compound("barbell-bench", "Barbell Bench", 3, "16"),
       ex("cable-lat-prayer", "Cable lat prayer", 2, "hoogste"),
       compound("smith-shoulder-press", "Smith shoulder press", 2),
       ex("y-raises", "Y-raises", 2, "22"),
       ex("supinated-db-bicep-curls", "Supinated db bicep curls", 2),
       unilateral("single-arm-pushdowns", "Single arm pushdowns", 2, "hoogste"),
+      unilateral("smith-traps-upper-d", "Smith traps", 2),
     ],
   },
   {
@@ -146,7 +146,6 @@ const sessions = [
       unilateral("neck-twist", "Neck twist", 2, "10"),
       unilateral("riser-holt", "Riser holt", 2),
       unilateral("cable-bends", "Cable bends", 2, "10"),
-      unilateral("smith-traps-d", "Smith traps", 2),
     ],
   },
   {
@@ -257,7 +256,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "145";
+const APP_VERSION = "146";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -4717,7 +4716,7 @@ function getExerciseCategory(exercise, group) {
     if (/(curl|bicep)/.test(name)) return "biceps";
     if (/(jm press|pushdown|tricep)/.test(name)) return "triceps";
     if (/(pull up|pull ups|row|lat prayer)/.test(name)) return "back";
-    if (/(shoulder press|laterial|lateral|side delt|y-raise|y-raises)/.test(name)) return "shoulders";
+    if (/(shoulder press|laterial|lateral|side delt|y-raise|y-raises|trap)/.test(name)) return "shoulders";
     if (/(bench|press|dips)/.test(name)) return "push";
     return "push";
   }
