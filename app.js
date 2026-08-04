@@ -258,7 +258,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "147";
+const APP_VERSION = "148";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -1360,8 +1360,8 @@ function renderSetRow(ref, set, setIndex, previousSet, entry) {
   if (isUnilateralSet(set, entry)) {
     return `
       <div class="set-pair">
-        ${renderStrengthSideRow(ref, set, setIndex, previousSet, "left", entry)}
         ${renderStrengthSideRow(ref, set, setIndex, previousSet, "right", entry)}
+        ${renderStrengthSideRow(ref, set, setIndex, previousSet, "left", entry)}
       </div>
     `;
   }
@@ -3665,8 +3665,8 @@ function cloneStrengthSet(set, entry) {
 function formatSetSummary(set, entry = {}) {
   if (isUnilateralSet(set, entry)) {
     return [
-      formatStrengthSideSummary(set.left, entry, "L"),
       formatStrengthSideSummary(set.right, entry, "R"),
+      formatStrengthSideSummary(set.left, entry, "L"),
     ].filter(Boolean).join(" / ");
   }
   return formatStrengthSideSummary(set, entry);
@@ -4056,9 +4056,9 @@ function getStrengthSetEstimateSeconds(set, previousSet, entry) {
   const compound = isCompoundTimeEstimate(entry);
   if (isUnilateralSet(set, entry)) {
     return GYM_TIME.setLogSeconds
-      + getStrengthSideEstimateSeconds(set?.left, previousSet?.left, compound, entry)
+      + getStrengthSideEstimateSeconds(set?.right, previousSet?.right, compound, entry)
       + REST_TIMER_SIDE_SECONDS
-      + getStrengthSideEstimateSeconds(set?.right, previousSet?.right, compound, entry);
+      + getStrengthSideEstimateSeconds(set?.left, previousSet?.left, compound, entry);
   }
 
   const prepSeconds = isBenchTimeEstimate(entry)
