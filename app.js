@@ -28,6 +28,8 @@ const GYM_TIME = Object.freeze({
   defaultCompoundReps: 6,
   defaultIsolationReps: 10,
   maxEstimatedReps: 30,
+  defaultIsometricSeconds: 20,
+  maxEstimatedHoldSeconds: 180,
   defaultRunSeconds: 30 * 60,
   defaultCardioSeconds: 10 * 60,
 });
@@ -144,7 +146,7 @@ const sessions = [
       unilateral("db-hamstring-curls-d", "Db hamstring curls", 2),
       unilateral("calve-raises-d", "Calve raises", 2),
       unilateral("neck-twist", "Neck twist", 2, "10"),
-      unilateral("riser-holt", "Riser holt", 2),
+      unilateral("riser-holt", "Riser hold", 2, "", { isometric: true }),
       unilateral("cable-bends", "Cable bends", 2, "10"),
     ],
   },
@@ -256,7 +258,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "146";
+const APP_VERSION = "147";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -1202,6 +1204,7 @@ function renderEntryBody(entry, ref, removable = false, previous = [], placehold
   }
 
   const unilateral = isUnilateralEntry(entry);
+  const effortLabel = isIsometricEntry(entry) ? "sec" : "reps";
   const rows = (entry.sets || []).map((set, setIndex) => renderSetRow(ref, set, setIndex, last?.sets?.[setIndex], entry)).join("");
   const hasSets = (entry.sets || []).length > 0;
   return `
@@ -1211,7 +1214,7 @@ function renderEntryBody(entry, ref, removable = false, previous = [], placehold
         <div class="set-field-labels${unilateral ? " is-unilateral" : ""}" aria-hidden="true">
           ${unilateral ? "<span>side</span>" : ""}
           <span>${usesBodyweightLoad(entry) ? "+kg" : "kg"}</span>
-          <span>reps</span>
+          <span>${effortLabel}</span>
           <span>rpe</span>
         </div>
       ` : ""}
@@ -1366,7 +1369,7 @@ function renderSetRow(ref, set, setIndex, previousSet, entry) {
   return `
     <div class="set-row" ${getRefAttrs(ref)} data-set-index="${setIndex}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "weight", usesBodyweightLoad(entry) ? "+kg" : "kg"))}" data-field="weight" value="${escapeAttr(set.weight)}">
-      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "reps", "reps"))}" data-field="reps" value="${escapeAttr(set.reps)}">
+      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "reps", isIsometricEntry(entry) ? "sec" : "reps"))}" data-field="reps" value="${escapeAttr(set.reps)}" aria-label="${isIsometricEntry(entry) ? "Seconden" : "Herhalingen"}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "rpe", "RPE"))}" data-field="rpe" value="${escapeAttr(set.rpe)}">
     </div>
   `;
@@ -1380,7 +1383,7 @@ function renderStrengthSideRow(ref, set, setIndex, previousSet, side, entry) {
     <div class="set-row is-unilateral" ${getRefAttrs(ref)} data-set-index="${setIndex}" data-side="${side}">
       <span class="set-side" aria-label="${side === "left" ? "Links" : "Rechts"}">${label}</span>
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "weight", usesBodyweightLoad(entry) ? "+kg" : "kg"))}" data-field="weight" value="${escapeAttr(current.weight)}">
-      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "reps", "reps"))}" data-field="reps" value="${escapeAttr(current.reps)}">
+      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "reps", isIsometricEntry(entry) ? "sec" : "reps"))}" data-field="reps" value="${escapeAttr(current.reps)}" aria-label="${label} ${isIsometricEntry(entry) ? "seconden" : "herhalingen"}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "rpe", "RPE"))}" data-field="rpe" value="${escapeAttr(current.rpe)}">
     </div>
   `;
@@ -3176,6 +3179,7 @@ function makeExerciseEntry(exercise) {
   }
   const unilateral = Boolean(exercise.unilateral);
   const usesBodyweight = Boolean(exercise.usesBodyweight);
+  const isometric = Boolean(exercise.isometric);
   return {
     kind: "strength",
     name: getProgramExerciseName(exercise),
@@ -3183,6 +3187,7 @@ function makeExerciseEntry(exercise) {
     note: "",
     ...(Number.isFinite(Number(exercise.restSeconds)) ? { restSeconds: Number(exercise.restSeconds) } : {}),
     unilateral,
+    isometric,
     usesBodyweight,
     bodyweight: usesBodyweight ? getDefaultBodyweight() : "",
     sets: Array.from({ length: exercise.setCount }, () => makeSet(unilateral)),
@@ -3330,7 +3335,9 @@ function normalizeEntry(entry, exercise) {
   }
   const unilateral = Boolean(entry.unilateral || exercise?.unilateral);
   const usesBodyweight = Boolean(entry.usesBodyweight || exercise?.usesBodyweight);
+  const isometric = Boolean(entry.isometric || exercise?.isometric);
   entry.unilateral = unilateral;
+  entry.isometric = isometric;
   entry.usesBodyweight = usesBodyweight;
   entry.bodyweight = usesBodyweight
     ? String(parseNumber(entry.bodyweight) > 0 ? entry.bodyweight : getDefaultBodyweight())
@@ -3667,7 +3674,8 @@ function formatSetSummary(set, entry = {}) {
 
 function formatStrengthSideSummary(set, entry = {}, sideLabel = "") {
   const load = getStrengthLoadLabel(set, entry);
-  const main = [load, set?.reps && `${set.reps}r`].filter(Boolean).join(" x ");
+  const effort = set?.reps && `${set.reps}${isIsometricEntry(entry) ? "s" : "r"}`;
+  const main = [load, effort].filter(Boolean).join(" x ");
   const summary = hasMetricValue(set?.rpe) ? `${main} @${set.rpe}` : main;
   return sideLabel && summary ? `${sideLabel} ${summary}` : summary;
 }
@@ -3724,6 +3732,10 @@ function hasMetricValue(value) {
 
 function isUnilateralEntry(entry) {
   return Boolean(entry?.unilateral);
+}
+
+function isIsometricEntry(entry) {
+  return Boolean(entry?.isometric);
 }
 
 function isUnilateralSet(set, entry = {}) {
@@ -4044,15 +4056,15 @@ function getStrengthSetEstimateSeconds(set, previousSet, entry) {
   const compound = isCompoundTimeEstimate(entry);
   if (isUnilateralSet(set, entry)) {
     return GYM_TIME.setLogSeconds
-      + getStrengthSideEstimateSeconds(set?.left, previousSet?.left, compound)
+      + getStrengthSideEstimateSeconds(set?.left, previousSet?.left, compound, entry)
       + REST_TIMER_SIDE_SECONDS
-      + getStrengthSideEstimateSeconds(set?.right, previousSet?.right, compound);
+      + getStrengthSideEstimateSeconds(set?.right, previousSet?.right, compound, entry);
   }
 
   const prepSeconds = isBenchTimeEstimate(entry)
     ? GYM_TIME.benchSetPrepSeconds
     : (compound ? GYM_TIME.compoundSetPrepSeconds : GYM_TIME.isolationSetPrepSeconds);
-  return GYM_TIME.setLogSeconds + prepSeconds + getEstimatedReps(set, previousSet, compound) * GYM_TIME.repSeconds;
+  return GYM_TIME.setLogSeconds + prepSeconds + getStrengthEffortEstimateSeconds(set, previousSet, compound, entry);
 }
 
 function getStrengthSetRemainingSeconds(set, previousSet, entry, context) {
@@ -4071,12 +4083,25 @@ function getStrengthSetRemainingSeconds(set, previousSet, entry, context) {
     context.sideTimerUsed = true;
     switchSeconds = 0;
   }
-  return GYM_TIME.setLogSeconds + switchSeconds + getStrengthSideEstimateSeconds(pendingSide, previousSide, compound);
+  return GYM_TIME.setLogSeconds + switchSeconds + getStrengthSideEstimateSeconds(pendingSide, previousSide, compound, entry);
 }
 
-function getStrengthSideEstimateSeconds(side, previousSide, compound) {
+function getStrengthSideEstimateSeconds(side, previousSide, compound, entry = {}) {
   const prepSeconds = compound ? GYM_TIME.compoundSidePrepSeconds : GYM_TIME.isolationSidePrepSeconds;
-  return prepSeconds + getEstimatedReps(side, previousSide, compound) * GYM_TIME.repSeconds;
+  return prepSeconds + getStrengthEffortEstimateSeconds(side, previousSide, compound, entry);
+}
+
+function getStrengthEffortEstimateSeconds(side, previousSide, compound, entry = {}) {
+  if (isIsometricEntry(entry)) {
+    const candidate = [side?.reps, previousSide?.reps]
+      .map(parseNumber)
+      .find((value) => Number.isFinite(value) && value > 0);
+    return Math.min(
+      GYM_TIME.maxEstimatedHoldSeconds,
+      Math.max(1, candidate || GYM_TIME.defaultIsometricSeconds),
+    );
+  }
+  return getEstimatedReps(side, previousSide, compound) * GYM_TIME.repSeconds;
 }
 
 function getEstimatedReps(side, previousSide, compound) {
@@ -4144,7 +4169,7 @@ function countFilledWorkoutItems(workout) {
 function getWorkoutVolume(workout) {
   const session = findSession(workout.sessionId);
   return getAllWorkoutEntries(workout, session).reduce((sum, entry) => {
-    if (isCardioEntry(entry)) return sum;
+    if (isCardioEntry(entry) || isIsometricEntry(entry)) return sum;
     return sum + (entry.sets || []).reduce((setSum, set) => {
       if (!hasCompleteStrengthSet(set, entry)) return setSum;
       const sides = isUnilateralSet(set, entry) ? [set.left, set.right] : [set];
@@ -4510,6 +4535,7 @@ function getChartMetrics(group, filter = "all") {
     .filter((session) => session.group === group)
     .flatMap((session) => session.exercises)
     .filter((exercise) => matchesChartFilter(exercise, group, filter))
+    .filter((exercise) => !exercise.isometric)
     .forEach((exercise) => {
       const name = getProgramExerciseName(exercise);
       const activityKey = getStrengthActivityKey(name, exercise.setup);
@@ -4790,6 +4816,7 @@ function getGeometricMean(values) {
 }
 
 function estimateOneRepMax(set, entry = {}) {
+  if (isIsometricEntry(entry)) return null;
   if (!hasCompleteStrengthSet(set, entry)) return null;
   if (isUnilateralSet(set, entry)) {
     const sideEntry = { ...entry, unilateral: false };
