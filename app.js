@@ -168,8 +168,9 @@ const sessions = [
 ];
 
 const cycleOrder = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-c", "lower-c", "upper-d", "lower-d"];
-const CHART_GROUPS = ["Upper", "Lower", "Running"];
+const CHART_GROUPS = ["Upper", "Lower", "Running", "Gewicht"];
 const STRENGTH_INDEX_METRIC = "strength:index";
+const BODYWEIGHT_METRIC = "bodyweight:kg";
 const RUN_5K_METRIC = "run:5k-estimate";
 const RUN_PACE_METRIC = "run:pace";
 const RUN_DISTANCE_METRIC = "run:distance";
@@ -199,6 +200,7 @@ const CHART_FILTERS = {
     { value: "abs", label: "Abs" },
   ],
   Running: [{ value: "all", label: "All" }],
+  Gewicht: [{ value: "all", label: "All" }],
 };
 const MAX_EFFECTIVE_REPS_FOR_E1RM = 50;
 const MAX_RIR_FROM_RPE = 5;
@@ -258,7 +260,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "149";
+const APP_VERSION = "153";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -1679,6 +1681,11 @@ function renderStats() {
   const filter = getChartFilter(group);
   const rangeDays = getStatsRangeDays();
   renderTrendChart(group, filter, rangeDays);
+
+  if (group === "Gewicht") {
+    els.recordsList.innerHTML = "";
+    return;
+  }
 
   if (shouldRenderBoomingGroups(group, filter)) {
     const highlights = getBoomingMuscleGroups(group, rangeDays);
@@ -4593,11 +4600,12 @@ function renderBoomingGroupItem(item) {
 
 function getRecords(group = getChartGroup(), filter = getChartFilter(group), rangeDays = getStatsRangeDays()) {
   if (group === "Running") return getRunningRecords(rangeDays);
+  if (group === "Gewicht") return [];
   return getStrengthRecords(group, filter, rangeDays);
 }
 
 function shouldRenderBoomingGroups(group, filter) {
-  return group !== "Running" && filter === "all";
+  return ["Upper", "Lower"].includes(group) && filter === "all";
 }
 
 function getBoomingMuscleGroups(group, rangeDays = getStatsRangeDays()) {
@@ -4733,6 +4741,7 @@ function getChartFilter(group) {
 }
 
 function getDefaultChartMetric(group) {
+  if (group === "Gewicht") return BODYWEIGHT_METRIC;
   return group === "Running" ? RUN_5K_METRIC : STRENGTH_INDEX_METRIC;
 }
 
@@ -4778,6 +4787,9 @@ function renderChartFilterControl(group, activeFilter) {
 }
 
 function getChartMetrics(group, filter = "all") {
+  if (group === "Gewicht") {
+    return [{ value: BODYWEIGHT_METRIC, label: "Lichaamsgewicht" }];
+  }
   if (group === "Running") {
     return [{ value: RUN_5K_METRIC, label: "5K schatting" }];
   }
@@ -4815,6 +4827,7 @@ function getChartMetrics(group, filter = "all") {
 }
 
 function getTrendPoints(group, metric, filter = "all", rangeDays = getStatsRangeDays()) {
+  if (group === "Gewicht") return getBodyweightTrendPoints(rangeDays);
   if (group === "Running") return getRunTrendPoints(metric, rangeDays);
   if (metric === STRENGTH_INDEX_METRIC) return getStrengthIndexTrendPoints(group, filter, rangeDays);
 
@@ -4907,6 +4920,21 @@ function getRunTrendPoints(metric, rangeDays = getStatsRangeDays()) {
         };
       }))
       .filter(Boolean));
+}
+
+function getBodyweightTrendPoints(rangeDays = getStatsRangeDays()) {
+  const days = getStatsRangeDays(rangeDays);
+  return getBodyweightRecords()
+    .filter((record) => {
+      const age = daysBetween(record.date, today());
+      return age >= 0 && age <= days;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((record) => ({
+      date: record.date,
+      label: "Daggewicht",
+      value: record.weight,
+    }));
 }
 
 function getExerciseTrendMeasurement(historyEntry, exerciseKey) {
@@ -5186,6 +5214,7 @@ function formatRaceTime(seconds) {
 }
 
 function formatChartValue(value, metric) {
+  if (metric === BODYWEIGHT_METRIC) return `${formatNumber(value)} kg`;
   if (metric === RUN_5K_METRIC) return formatRaceTime(value);
   if (metric === RUN_PACE_METRIC) return `${formatPace(value)}/km`;
   if (metric === RUN_DISTANCE_METRIC) return `${formatNumber(value)} km`;
@@ -5196,6 +5225,7 @@ function formatChartValue(value, metric) {
 }
 
 function formatChartAxisValue(value, metric) {
+  if (metric === BODYWEIGHT_METRIC) return `${formatNumber(value)}kg`;
   if (metric === RUN_5K_METRIC) return formatRaceTime(value);
   if (metric === RUN_PACE_METRIC) return formatPace(value);
   if (metric === RUN_DURATION_METRIC) return `${formatNumber(value)}m`;
@@ -5212,6 +5242,11 @@ function formatLogProgressPercent(value) {
 function renderChartReadout(points, metric) {
   if (!points.length) {
     els.chartReadout.innerHTML = "";
+    return;
+  }
+
+  if (metric === BODYWEIGHT_METRIC) {
+    renderBodyweightChartReadout(points);
     return;
   }
 
@@ -5253,6 +5288,42 @@ function renderChartReadout(points, metric) {
     .map(({ label, value, tone }) => `
       <div class="chart-stat ${tone}">
         <strong>${value}</strong>
+        <span>${escapeHtml(label)}</span>
+      </div>
+    `)
+    .join("");
+}
+
+function renderBodyweightChartReadout(points) {
+  const first = points[0];
+  const latest = points[points.length - 1];
+  const cards = [{
+    label: "Laatste meting",
+    value: formatChartValue(latest.value, BODYWEIGHT_METRIC),
+  }];
+
+  if (points.length > 1) {
+    const change = latest.value - first.value;
+    const percent = first.value ? (change / first.value) * 100 : 0;
+    const sign = change > 0 ? "+" : "";
+    const percentSign = percent > 0 ? "+" : "";
+    cards.push({
+      label: `Sinds ${formatDateShort(first.date)}`,
+      value: `${sign}${formatNumber(change)} kg (${percentSign}${formatNumber(percent)}%)`,
+    });
+
+    const recent = points.slice(-7);
+    const average = recent.reduce((sum, point) => sum + point.value, 0) / recent.length;
+    cards.push({
+      label: `Gem. laatste ${recent.length}`,
+      value: formatChartValue(average, BODYWEIGHT_METRIC),
+    });
+  }
+
+  els.chartReadout.innerHTML = cards
+    .map(({ label, value }) => `
+      <div class="chart-stat">
+        <strong>${escapeHtml(value)}</strong>
         <span>${escapeHtml(label)}</span>
       </div>
     `)
@@ -5330,7 +5401,8 @@ function drawTrendCanvas(points, metric) {
   const plotHeight = cssHeight - pad.top - pad.bottom;
   const rawMin = Math.min(...points.map((point) => point.value));
   const rawMax = Math.max(...points.map((point) => point.value));
-  const padding = Math.max(5, (rawMax - rawMin) * 0.12);
+  const minimumPadding = metric.value === BODYWEIGHT_METRIC ? 0.5 : 5;
+  const padding = Math.max(minimumPadding, (rawMax - rawMin) * 0.12);
   const min = Math.max(0, rawMin - padding);
   const max = rawMax === rawMin ? rawMax + padding : rawMax + padding;
   const range = max - min || 1;
@@ -5354,8 +5426,13 @@ function drawTrendCanvas(points, metric) {
   }
 
   const gradient = ctx.createLinearGradient(0, pad.top, 0, cssHeight - pad.bottom);
-  gradient.addColorStop(0, "rgba(215, 255, 99, 0.22)");
-  gradient.addColorStop(1, "rgba(215, 255, 99, 0)");
+  if (metric.value === BODYWEIGHT_METRIC) {
+    gradient.addColorStop(0, "rgba(107, 183, 255, 0.20)");
+    gradient.addColorStop(1, "rgba(107, 183, 255, 0)");
+  } else {
+    gradient.addColorStop(0, "rgba(215, 255, 99, 0.22)");
+    gradient.addColorStop(1, "rgba(215, 255, 99, 0)");
+  }
 
   ctx.beginPath();
   points.forEach((point, index) => {
@@ -5396,10 +5473,16 @@ function drawTrendCanvas(points, metric) {
   const first = points[0];
   const latest = points[points.length - 1];
   ctx.fillStyle = textDim;
-  ctx.fillText(formatDateShort(first.date), pad.left, cssHeight - 16);
-  const latestLabel = formatDateShort(latest.date);
-  const latestWidth = ctx.measureText(latestLabel).width;
-  ctx.fillText(latestLabel, cssWidth - pad.right - latestWidth, cssHeight - 16);
+  if (points.length === 1) {
+    const dateLabel = formatDateShort(first.date);
+    const dateWidth = ctx.measureText(dateLabel).width;
+    ctx.fillText(dateLabel, pad.left + ((plotWidth - dateWidth) / 2), cssHeight - 16);
+  } else {
+    ctx.fillText(formatDateShort(first.date), pad.left, cssHeight - 16);
+    const latestLabel = formatDateShort(latest.date);
+    const latestWidth = ctx.measureText(latestLabel).width;
+    ctx.fillText(latestLabel, cssWidth - pad.right - latestWidth, cssHeight - 16);
+  }
 }
 
 function getCycleCompletionStreak() {

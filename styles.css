@@ -1624,6 +1624,10 @@ h1 {
   background: #0e1011;
 }
 
+.group-control {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .segment-control button,
 .filter-control button {
   min-width: 0;
@@ -1635,6 +1639,10 @@ h1 {
   font-size: clamp(0.78rem, 2.7vw, 0.9rem);
   font-weight: 800;
   padding: 0 clamp(8px, 2vw, 12px);
+}
+
+.group-control button {
+  padding-inline: clamp(4px, 1.4vw, 9px);
 }
 
 .segment-control button.is-active,
@@ -2200,7 +2208,7 @@ h1 {
   }
 
   .chart-controls {
-    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(160px, 200px);
+    grid-template-columns: minmax(280px, 340px) minmax(0, 1fr) minmax(160px, 200px);
     align-items: end;
   }
 

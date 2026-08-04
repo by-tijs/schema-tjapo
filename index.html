@@ -14,10 +14,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=149">
+  <link rel="stylesheet" href="styles.css?v=153">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=149" defer></script>
-  <script src="app.js?v=149" defer></script>
+  <script src="firebase-config.js?v=153" defer></script>
+  <script src="app.js?v=153" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -30,13 +30,13 @@
         <i data-lucide="history"></i>
         <span>Log</span>
       </a>
-      <a href="#stats" data-view-link="stats">
-        <i data-lucide="chart-no-axes-combined"></i>
-        <span>Stats</span>
-      </a>
       <a href="#weight" data-view-link="weight">
         <i data-lucide="scale"></i>
         <span>Gewicht</span>
+      </a>
+      <a href="#stats" data-view-link="stats">
+        <i data-lucide="chart-no-axes-combined"></i>
+        <span>Stats</span>
       </a>
     </nav>
 
@@ -88,10 +88,11 @@
         <div id="stats-grid" class="stats-grid"></div>
         <section class="chart-panel" aria-label="Stats grafiek">
           <div class="chart-controls">
-            <div class="segment-control" aria-label="Groep">
+            <div class="segment-control group-control" aria-label="Groep">
               <button type="button" data-action="chart-group" data-chart-group="Upper">Upper</button>
               <button type="button" data-action="chart-group" data-chart-group="Lower">Lower</button>
               <button type="button" data-action="chart-group" data-chart-group="Running">Running</button>
+              <button type="button" data-action="chart-group" data-chart-group="Gewicht">Gewicht</button>
             </div>
             <div class="segment-control range-control" aria-label="Periode">
               <button type="button" data-action="chart-range" data-range-days="30">30d</button>
@@ -105,7 +106,7 @@
             </label>
           </div>
           <div class="chart-stage">
-            <canvas id="e1rm-chart" width="900" height="340" aria-label="Estimated one rep max trend"></canvas>
+            <canvas id="e1rm-chart" width="900" height="340" aria-label="Trendgrafiek"></canvas>
             <div id="e1rm-empty" class="empty-state" hidden>Nog geen data voor deze keuze.</div>
           </div>
           <div id="chart-readout" class="chart-readout"></div>
@@ -238,8 +239,8 @@
     </button>
   </div>
 
-  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=149" preload="auto" loop playsinline aria-hidden="true"></audio>
-  <audio id="side-alarm-audio" src="side-alarm.mp3?v=149" preload="auto" playsinline aria-hidden="true"></audio>
+  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=153" preload="auto" loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" src="side-alarm.mp3?v=153" preload="auto" playsinline aria-hidden="true"></audio>
 
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>

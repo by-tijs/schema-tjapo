@@ -1,15 +1,15 @@
 "use strict";
 
-const CACHE_NAME = "schema-tjapo-cache-v149";
+const CACHE_NAME = "schema-tjapo-cache-v153";
 const CORE_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=149",
-  "./firebase-config.js?v=149",
-  "./app.js?v=149",
-  "./rest-alarm.mp3?v=149",
-  "./side-alarm.mp3?v=149",
-  "./audio-unlock.mp3?v=149",
+  "./styles.css?v=153",
+  "./firebase-config.js?v=153",
+  "./app.js?v=153",
+  "./rest-alarm.mp3?v=153",
+  "./side-alarm.mp3?v=153",
+  "./audio-unlock.mp3?v=153",
   "./manifest.webmanifest",
   "./favicon-32.png",
   "./apple-touch-icon.png",
