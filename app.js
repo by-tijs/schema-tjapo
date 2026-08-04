@@ -258,9 +258,9 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "148";
+const APP_VERSION = "149";
 const FIREBASE_SDK_VERSION = "12.16.0";
-const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
+const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
 const CALENDAR_WEEKDAYS = ["ma", "di", "wo", "do", "vr", "za", "zo"];
 
@@ -304,6 +304,8 @@ const uiState = {
   editingName: null,
   historyCursor: new Map(),
   datePickerMonth: null,
+  datePickerContext: "train",
+  datePickerAnchor: null,
 };
 const historyCache = {
   ref: null,
@@ -461,6 +463,11 @@ function bindElements() {
   els.chartEmpty = document.getElementById("e1rm-empty");
   els.chartReadout = document.getElementById("chart-readout");
   els.recordsList = document.getElementById("records-list");
+  els.weightDateButton = document.getElementById("weight-date-button");
+  els.weightDateLabel = document.getElementById("weight-date-label");
+  els.weightValueReadout = document.getElementById("weight-value-readout");
+  els.dailyBodyweight = document.getElementById("daily-bodyweight");
+  els.weightHistory = document.getElementById("weight-history");
   els.backupFallback = document.getElementById("backup-fallback");
   els.storageReadout = document.getElementById("storage-readout");
   els.cloudStatus = document.getElementById("cloud-status");
@@ -516,10 +523,14 @@ function installListeners() {
     if (document.visibilityState === "hidden") {
       flushStateSave();
     } else {
+      activateTodayAfterDayChange();
       recoverRestTimerAudio();
     }
   });
-  window.addEventListener("pageshow", recoverRestTimerAudio);
+  window.addEventListener("pageshow", () => {
+    activateTodayAfterDayChange();
+    recoverRestTimerAudio();
+  });
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
@@ -537,7 +548,23 @@ function installListeners() {
 }
 
 function ensureDefaults() {
-  if (!state.activeDate) state.activeDate = today();
+  let changed = false;
+  const currentDate = today();
+  if (state.lastOpenedDate !== currentDate) {
+    state.lastOpenedDate = currentDate;
+    state.activeDate = currentDate;
+    state.weightDate = currentDate;
+    state.editingHistoryId = null;
+    changed = true;
+  }
+  if (!isValidDateString(state.activeDate)) {
+    state.activeDate = currentDate;
+    changed = true;
+  }
+  if (!isValidDateString(state.weightDate)) {
+    state.weightDate = currentDate;
+    changed = true;
+  }
   if (!state.activeSessionId) state.activeSessionId = getNextSession().id;
   if (!Number.isInteger(state.cycleIndex)) state.cycleIndex = 0;
   if (state.cycleIndex < 0 || state.cycleIndex >= cycleOrder.length) state.cycleIndex = 0;
@@ -547,6 +574,16 @@ function ensureDefaults() {
   if (state.cycleCompleted.length >= cycleOrder.length) state.cycleCompleted = [];
   if (!state.workouts) state.workouts = {};
   if (!Array.isArray(state.history)) state.history = [];
+  if (!state.bodyweights || Array.isArray(state.bodyweights) || typeof state.bodyweights !== "object") {
+    state.bodyweights = {};
+    changed = true;
+  }
+  Object.entries(state.bodyweights).forEach(([date, value]) => {
+    if (!isValidDateString(date) || !Number.isFinite(parseNumber(value)) || parseNumber(value) <= 0) {
+      delete state.bodyweights[date];
+      changed = true;
+    }
+  });
   if (!state.exerciseNames || Array.isArray(state.exerciseNames) || typeof state.exerciseNames !== "object") state.exerciseNames = {};
   if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = String(DEFAULT_BODYWEIGHT_KG);
   const migrated = migrateWeightedDipsBodyweight();
@@ -556,7 +593,22 @@ function ensureDefaults() {
   if (!state.chartMetric) state.chartMetric = getDefaultChartMetric(state.chartGroup);
   state.statsRangeDays = getStatsRangeDays(state.statsRangeDays);
   syncViewFromHash();
-  return migrated;
+  return changed || migrated;
+}
+
+function activateTodayAfterDayChange() {
+  const currentDate = today();
+  if (state.lastOpenedDate === currentDate) return false;
+  state.lastOpenedDate = currentDate;
+  state.activeDate = currentDate;
+  state.weightDate = currentDate;
+  state.editingHistoryId = null;
+  stopRestTimer();
+  clearRestTimerCompletionTracking();
+  collapseExerciseCards();
+  saveState();
+  renderAll();
+  return true;
 }
 
 function migrateWeightedDipsBodyweight() {
@@ -569,7 +621,7 @@ function migrateWeightedDipsBodyweight() {
       changed = true;
     }
     if (!Number.isFinite(parseNumber(entry.bodyweight)) || parseNumber(entry.bodyweight) <= 0) {
-      entry.bodyweight = String(DEFAULT_BODYWEIGHT_KG);
+      entry.bodyweight = getDefaultBodyweight(workout?.date || state.activeDate);
       changed = true;
     }
   };
@@ -660,6 +712,7 @@ function renderAll() {
   const view = getActiveViewName();
   if (view === "log") renderHistory();
   if (view === "stats") renderStats();
+  if (view === "weight") renderWeightView();
   renderStorage();
   renderRestTimer();
   refreshIcons();
@@ -774,7 +827,7 @@ function handleSessionRailClick(event) {
 }
 
 function handleHorizontalRailPointerDown(event) {
-  const rail = event.target.closest?.(".preset-strip, .filter-control, .previous-line");
+  const rail = event.target.closest?.(".preset-strip, .filter-control, .previous-line, .view-tabs");
   if (event.pointerType !== "mouse" || event.button !== 0 || !rail || rail.scrollWidth <= rail.clientWidth) return;
 
   horizontalDrag.active = true;
@@ -824,7 +877,7 @@ function handleHorizontalRailPointerEnd(event) {
 }
 
 function handleHorizontalRailClick(event) {
-  if ((!horizontalDrag.dragged && performance.now() >= suppressHorizontalClickUntil) || !event.target.closest?.(".preset-strip, .filter-control, .previous-line")) return;
+  if ((!horizontalDrag.dragged && performance.now() >= suppressHorizontalClickUntil) || !event.target.closest?.(".preset-strip, .filter-control, .previous-line, .view-tabs")) return;
   event.preventDefault();
   event.stopPropagation();
 }
@@ -834,17 +887,31 @@ function renderDateControl() {
   if (els.dateLabel) els.dateLabel.textContent = formatDateNumeric(state.activeDate);
   if (els.dateButton) {
     els.dateButton.setAttribute("aria-label", `Datum ${formatDate(state.activeDate)}`);
-    els.dateButton.setAttribute("aria-expanded", els.datePicker && !els.datePicker.hidden ? "true" : "false");
+    els.dateButton.setAttribute("aria-expanded", els.datePicker && !els.datePicker.hidden && uiState.datePickerContext === "train" ? "true" : "false");
   }
   if (els.datePicker && !els.datePicker.hidden) renderDatePicker();
 }
 
-function openDatePicker() {
-  uiState.datePickerMonth = getMonthStart(state.activeDate);
+function renderWeightDateControl() {
+  if (els.weightDateLabel) els.weightDateLabel.textContent = formatDateNumeric(state.weightDate);
+  if (els.weightDateButton) {
+    els.weightDateButton.setAttribute("aria-label", `Datum ${formatDate(state.weightDate)}`);
+    els.weightDateButton.setAttribute("aria-expanded", els.datePicker && !els.datePicker.hidden && uiState.datePickerContext === "weight" ? "true" : "false");
+  }
+}
+
+function getDatePickerDate() {
+  return uiState.datePickerContext === "weight" ? state.weightDate : state.activeDate;
+}
+
+function openDatePicker(trigger) {
+  uiState.datePickerContext = trigger?.dataset.dateContext === "weight" ? "weight" : "train";
+  uiState.datePickerAnchor = trigger || (uiState.datePickerContext === "weight" ? els.weightDateButton : els.dateButton);
+  uiState.datePickerMonth = getMonthStart(getDatePickerDate());
   renderDatePicker();
   positionDatePicker();
   els.datePicker.hidden = false;
-  els.dateButton?.setAttribute("aria-expanded", "true");
+  uiState.datePickerAnchor?.setAttribute("aria-expanded", "true");
   requestAnimationFrame(() => {
     els.datePicker.classList.add("is-visible");
     const selected = els.datePickerGrid?.querySelector(".calendar-day.is-selected");
@@ -853,8 +920,9 @@ function openDatePicker() {
 }
 
 function positionDatePicker() {
-  if (!els.datePicker || !els.dateButton) return;
-  const rect = els.dateButton.getBoundingClientRect();
+  const anchor = uiState.datePickerAnchor || (uiState.datePickerContext === "weight" ? els.weightDateButton : els.dateButton);
+  if (!els.datePicker || !anchor) return;
+  const rect = anchor.getBoundingClientRect();
   els.datePicker.style.setProperty("--date-picker-top", `${Math.round(rect.bottom + 8)}px`);
   els.datePicker.style.setProperty("--date-picker-right", `${Math.max(10, Math.round(window.innerWidth - rect.right))}px`);
 }
@@ -862,20 +930,31 @@ function positionDatePicker() {
 function closeDatePicker() {
   if (!els.datePicker || els.datePicker.hidden) return;
   els.datePicker.classList.remove("is-visible");
-  els.dateButton?.setAttribute("aria-expanded", "false");
+  uiState.datePickerAnchor?.setAttribute("aria-expanded", "false");
   window.setTimeout(() => {
     els.datePicker.hidden = true;
   }, 160);
 }
 
 function shiftDatePickerMonth(amount) {
-  uiState.datePickerMonth = addMonths(uiState.datePickerMonth || getMonthStart(state.activeDate), amount);
+  uiState.datePickerMonth = addMonths(uiState.datePickerMonth || getMonthStart(getDatePickerDate()), amount);
   renderDatePicker();
 }
 
 function selectCalendarDate(dateString) {
   if (!isValidDateString(dateString)) return;
   closeDatePicker();
+  if (uiState.datePickerContext === "weight") {
+    if (dateString === state.weightDate) {
+      renderWeightDateControl();
+      return;
+    }
+    state.weightDate = dateString;
+    saveState();
+    renderWeightView();
+    refreshIcons();
+    return;
+  }
   if (dateString === state.activeDate) {
     renderDateControl();
     return;
@@ -893,14 +972,16 @@ function selectCalendarDate(dateString) {
 
 function renderDatePicker() {
   if (!els.datePickerGrid) return;
-  const monthStart = uiState.datePickerMonth || getMonthStart(state.activeDate);
+  const selectedDate = getDatePickerDate();
+  const monthStart = uiState.datePickerMonth || getMonthStart(selectedDate);
   const currentMonth = parseDateLocal(monthStart).getMonth();
   const calendarStart = addDays(monthStart, -getMondayOffset(monthStart));
   const todayString = today();
-  const markedDates = getCalendarMarkedDates();
+  const markedDates = getCalendarMarkedDates(uiState.datePickerContext);
+  const markedDateLabel = uiState.datePickerContext === "weight" ? "meting aanwezig" : "training aanwezig";
 
   if (els.datePickerMonth) els.datePickerMonth.textContent = formatMonthTitle(monthStart);
-  if (els.datePickerSelected) els.datePickerSelected.textContent = formatDateNumeric(state.activeDate);
+  if (els.datePickerSelected) els.datePickerSelected.textContent = formatDateNumeric(selectedDate);
   if (els.datePickerWeekdays && !els.datePickerWeekdays.children.length) {
     els.datePickerWeekdays.innerHTML = CALENDAR_WEEKDAYS.map((day) => `<span>${day}</span>`).join("");
   }
@@ -912,13 +993,13 @@ function renderDatePicker() {
     const classes = [
       "calendar-day",
       date.getMonth() !== currentMonth ? "is-outside" : "",
-      dateString === state.activeDate ? "is-selected" : "",
+      dateString === selectedDate ? "is-selected" : "",
       dateString === todayString ? "is-today" : "",
       markedDates.has(dateString) ? "has-log" : "",
     ].filter(Boolean).join(" ");
-    const label = `${formatDate(dateString)}${markedDates.has(dateString) ? ", log aanwezig" : ""}`;
+    const label = `${formatDate(dateString)}${markedDates.has(dateString) ? `, ${markedDateLabel}` : ""}`;
     return `
-      <button class="${classes}" type="button" data-action="calendar-select-date" data-date="${dateString}" aria-label="${escapeAttr(label)}" aria-pressed="${dateString === state.activeDate ? "true" : "false"}">
+      <button class="${classes}" type="button" data-action="calendar-select-date" data-date="${dateString}" aria-label="${escapeAttr(label)}" aria-pressed="${dateString === selectedDate ? "true" : "false"}">
         <span>${day}</span>
         ${markedDates.has(dateString) ? "<i></i>" : ""}
       </button>
@@ -926,13 +1007,27 @@ function renderDatePicker() {
   }).join("");
 }
 
-function getCalendarMarkedDates() {
-  const dates = new Set(state.history.map((entry) => entry.date).filter(Boolean));
+function getCalendarMarkedDates(context = "train") {
+  if (context === "weight") return new Set(Object.keys(state.bodyweights || {}));
+  const dates = new Set((state.history || [])
+    .filter((entry) => (Number(entry?.doneSets) || 0) > 0 || workoutHasCompletedItems(entry?.workout))
+    .map((entry) => entry.date)
+    .filter(Boolean));
   Object.entries(state.workouts || {}).forEach(([key, workout]) => {
     const date = key.split("::")[0];
-    if (date && countFilledWorkoutItems(workout) > 0) dates.add(date);
+    if (date && workoutHasCompletedItems(workout)) dates.add(date);
   });
   return dates;
+}
+
+function workoutHasCompletedItems(workout) {
+  const session = findSession(workout?.sessionId);
+  return getAllWorkoutEntries(workout, session).some((entry) => {
+    if (isMetricEntry(entry)) {
+      return getMetricAttempts(entry).some((attempt) => hasCompleteMetricAttempt(attempt, entry.kind));
+    }
+    return (entry.sets || []).some((set) => hasCompleteStrengthSet(set, entry));
+  });
 }
 
 function handleDatePickerPointerDown(event) {
@@ -1432,6 +1527,132 @@ function renderHistory() {
     .join("");
 }
 
+function renderWeightView() {
+  if (!els.dailyBodyweight || !els.weightHistory) return;
+  renderWeightDateControl();
+  const exact = getRecordedBodyweight(state.weightDate);
+  const fallback = getBodyweightForDate(state.weightDate);
+  els.dailyBodyweight.value = exact ? exact.value : "";
+  els.dailyBodyweight.placeholder = exact ? "kg" : formatNumber(fallback);
+  renderWeightReadout();
+  renderWeightHistory();
+}
+
+function renderWeightReadout() {
+  if (!els.weightValueReadout) return;
+  const record = getRecordedBodyweight(state.weightDate);
+  els.weightValueReadout.textContent = record ? `${formatNumber(record.weight)} kg` : "--";
+}
+
+function renderWeightHistory() {
+  if (!els.weightHistory) return;
+  const records = getBodyweightRecords().slice(0, 30);
+  if (!records.length) {
+    els.weightHistory.innerHTML = '<div class="empty-state">Nog geen gewichtsmetingen.</div>';
+    return;
+  }
+
+  els.weightHistory.innerHTML = records.map((record) => `
+    <article class="weight-record">
+      <button class="weight-record-main" type="button" data-action="select-weight-date" data-date="${record.date}">
+        <span class="record-title">${escapeHtml(formatDate(record.date))}</span>
+        <span class="record-meta">${record.date === today() ? "Vandaag" : "Dagmeting"}</span>
+      </button>
+      <div class="weight-record-actions">
+        <strong class="weight-record-value">${formatNumber(record.weight)} kg</strong>
+        <button class="mini-button icon-mini danger" type="button" data-action="delete-bodyweight" data-date="${record.date}" aria-label="Verwijder gewicht van ${escapeAttr(formatDate(record.date))}" title="Verwijder">
+          <i data-lucide="trash"></i>
+        </button>
+      </div>
+    </article>
+  `).join("");
+  refreshIcons();
+}
+
+function getBodyweightRecords() {
+  return Object.entries(state.bodyweights || {})
+    .map(([date, value]) => ({ date, value: String(value), weight: parseNumber(value) }))
+    .filter((record) => isValidDateString(record.date) && Number.isFinite(record.weight) && record.weight > 0)
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function getRecordedBodyweight(date) {
+  const value = state.bodyweights?.[date];
+  const weight = parseNumber(value);
+  return Number.isFinite(weight) && weight > 0 ? { date, value: String(value), weight } : null;
+}
+
+function getBodyweightForDate(date = state.activeDate) {
+  const exact = getRecordedBodyweight(date);
+  if (exact) return exact.weight;
+
+  const previous = getBodyweightRecords().find((record) => record.date <= date);
+  if (previous) return previous.weight;
+
+  const fallback = parseNumber(state.bodyweight);
+  return Number.isFinite(fallback) && fallback > 0 ? fallback : DEFAULT_BODYWEIGHT_KG;
+}
+
+function setDailyBodyweight(date, value) {
+  if (!isValidDateString(date)) return false;
+  state.bodyweights ||= {};
+  const raw = normalizePlaceholderValue(value);
+  const weight = parseNumber(raw);
+
+  if (!raw) {
+    delete state.bodyweights[date];
+    const latest = getBodyweightRecords()[0];
+    state.bodyweight = latest ? latest.value : String(DEFAULT_BODYWEIGHT_KG);
+    syncBodyweightForDate(date, getBodyweightForDate(date));
+    return true;
+  }
+
+  if (!Number.isFinite(weight) || weight <= 0) return false;
+  state.bodyweights[date] = raw;
+  state.bodyweight = raw;
+  syncBodyweightForDate(date, weight);
+  return true;
+}
+
+function syncBodyweightForDate(date, weight) {
+  const value = String(weight);
+  Object.values(state.workouts || {}).forEach((workout) => {
+    if (workout?.date === date) applyBodyweightToWorkout(workout, value);
+  });
+
+  state.history = (state.history || []).map((historyEntry) => {
+    if (historyEntry?.date !== date || !historyEntry.workout) return historyEntry;
+    const updated = structuredCloneSafe(historyEntry);
+    applyBodyweightToWorkout(updated.workout, value);
+    return updated;
+  });
+}
+
+function applyBodyweightToWorkout(workout, value) {
+  const entries = [
+    ...Object.values(workout?.exercises || {}),
+    ...(workout?.customItems || []),
+  ];
+  entries.forEach((entry) => {
+    if (entry?.usesBodyweight) entry.bodyweight = String(value);
+  });
+}
+
+function selectWeightDate(date) {
+  if (!isValidDateString(date)) return;
+  state.weightDate = date;
+  saveState();
+  renderWeightView();
+  refreshIcons();
+}
+
+function deleteBodyweight(date) {
+  if (!getRecordedBodyweight(date)) return;
+  setDailyBodyweight(date, "");
+  saveState(true);
+  renderAll();
+}
+
 function renderStats() {
   const last30 = getStatsHistory(30);
   const totalSets = state.history.reduce((sum, entry) => sum + (entry.doneSets || 0), 0);
@@ -1570,12 +1791,14 @@ function runAction(trigger) {
   if (action === "reset-cycle") resetCycle();
   if (action === "confirm-pending") confirmPendingAction();
   if (action === "cancel-confirm") closeConfirmModal();
-  if (action === "open-date-picker") openDatePicker();
+  if (action === "open-date-picker") openDatePicker(trigger);
   if (action === "close-date-picker") closeDatePicker();
   if (action === "calendar-prev-month") shiftDatePickerMonth(-1);
   if (action === "calendar-next-month") shiftDatePickerMonth(1);
   if (action === "calendar-select-date") selectCalendarDate(trigger.dataset.date);
   if (action === "calendar-relative") selectCalendarDate(addDays(today(), Number(trigger.dataset.dateOffset || 0)));
+  if (action === "select-weight-date") selectWeightDate(trigger.dataset.date);
+  if (action === "delete-bodyweight") deleteBodyweight(trigger.dataset.date);
   if (action === "quick-export") exportData();
   if (action === "import-data") els.importFile?.click();
   if (action === "cloud-login") cloudLogin();
@@ -1667,6 +1890,17 @@ function handleKeydown(event) {
 
 function handleInput(event) {
   const target = event.target;
+  if (target.dataset.field === "daily-bodyweight") {
+    const value = normalizeInputValue(target);
+    if (setDailyBodyweight(state.weightDate, value)) {
+      renderWeightReadout();
+      renderWeightHistory();
+      refreshIcons();
+      saveState();
+    }
+    return;
+  }
+
   if (target.dataset.field === "exercise-name") {
     const ref = getRefFromElement(target);
     setProgramExerciseName(ref.exerciseId, target.value);
@@ -1704,7 +1938,7 @@ function handleInput(event) {
     const entry = getEntryFromElement(workout, target);
     const bodyweight = normalizeInputValue(target);
     entry.bodyweight = bodyweight;
-    if (parseNumber(bodyweight) > 0) state.bodyweight = bodyweight;
+    if (parseNumber(bodyweight) > 0) setDailyBodyweight(state.activeDate, bodyweight);
     updateEntrySummary(target, entry);
     saveState();
     return;
@@ -2691,8 +2925,7 @@ function clearEditingHistoryIfActiveTargetChanged() {
 }
 
 function resetCurrent() {
-  const workout = getActiveWorkout();
-  const filledCount = countFilledWorkoutItems(workout);
+  const filledCount = getFilledTrainingItemCountForDate(state.activeDate);
   if (filledCount >= 3) {
     openResetConfirm(filledCount);
     return;
@@ -2704,12 +2937,12 @@ function resetCurrent() {
 function performResetCurrent() {
   stopRestTimer();
   clearRestTimerCompletionTracking();
-  const sessionId = state.activeSessionId;
   const date = state.activeDate;
-  const key = workoutKey(state.activeSessionId, state.activeDate);
-  const deletedHistory = deleteHistoryForWorkout(sessionId, date);
+  const deletedHistory = deleteHistoryForDate(date);
 
-  delete state.workouts[key];
+  Object.keys(state.workouts || {}).forEach((key) => {
+    if (key.startsWith(`${date}::`)) delete state.workouts[key];
+  });
   if (deletedHistory.length) {
     if (deletedHistory.some((entry) => entry.id === state.editingHistoryId)) state.editingHistoryId = null;
     removeCycleCompletions(deletedHistory.map((entry) => entry.sessionId));
@@ -2728,6 +2961,16 @@ function openResetConfirm(filledCount) {
     message: `${filledCount} ingevulde items worden gewist voor deze dag.`,
     confirmLabel: "Verwijder",
   });
+}
+
+function getFilledTrainingItemCountForDate(date) {
+  const workoutCount = Object.values(state.workouts || {})
+    .filter((workout) => workout?.date === date)
+    .reduce((sum, workout) => sum + countFilledWorkoutItems(workout), 0);
+  const historyCount = (state.history || [])
+    .filter((entry) => entry?.date === date)
+    .reduce((sum, entry) => sum + Math.max(0, Number(entry.doneSets) || 0), 0);
+  return Math.max(workoutCount, historyCount);
 }
 
 function openConfirmModal({ action, title, message, confirmLabel }) {
@@ -2793,8 +3036,8 @@ function resetAll() {
   renderAll();
 }
 
-function deleteHistoryForWorkout(sessionId, date) {
-  const deleted = state.history.filter((entry) => entry.sessionId === sessionId && entry.date === date);
+function deleteHistoryForDate(date) {
+  const deleted = state.history.filter((entry) => entry.date === date);
   if (!deleted.length) return [];
   const deletedIds = new Set(deleted.map((entry) => entry.id));
   state.history = state.history.filter((entry) => !deletedIds.has(entry.id));
@@ -2821,6 +3064,9 @@ function openHistory(historyId) {
 function deleteHistory(historyId) {
   const deleted = state.history.filter((item) => item.id === historyId);
   state.history = state.history.filter((item) => item.id !== historyId);
+  deleted.forEach((entry) => {
+    delete state.workouts?.[workoutKey(entry.sessionId, entry.date)];
+  });
   if (state.editingHistoryId === historyId) state.editingHistoryId = null;
   if (deleted.length) {
     removeCycleCompletions(deleted.map((entry) => entry.sessionId));
@@ -3107,11 +3353,17 @@ function compareIsoDates(a, b) {
 function stateHasMeaningfulData(candidate) {
   if (Array.isArray(candidate?.history) && candidate.history.length > 0) return true;
   if (Array.isArray(candidate?.cycleCompleted) && candidate.cycleCompleted.length > 0) return true;
+  if (Object.keys(candidate?.bodyweights || {}).length > 0) return true;
   return Object.values(candidate?.workouts || {}).some((workout) => workoutHasMeaningfulData(workout));
 }
 
 function workoutHasMeaningfulData(workout) {
-  return (workout?.entries || []).some((entry) => {
+  if (String(workout?.note || "").trim()) return true;
+  const entries = [
+    ...Object.values(workout?.exercises || {}),
+    ...(workout?.customItems || []),
+  ];
+  return entries.some((entry) => {
     if (entry.note && String(entry.note).trim()) return true;
     if (entry.kind === "strength") return (entry.sets || []).some(hasTouchedStrengthSet);
     if (entry.kind === "run" || entry.kind === "cardio") {
@@ -3150,7 +3402,7 @@ function makeWorkout(session, date) {
   const exercises = {};
   if (session.id !== "overig") {
     session.exercises.forEach((exercise) => {
-      exercises[exercise.id] = makeExerciseEntry(exercise);
+      exercises[exercise.id] = makeExerciseEntry(exercise, date);
     });
   }
   return {
@@ -3162,7 +3414,7 @@ function makeWorkout(session, date) {
   };
 }
 
-function makeExerciseEntry(exercise) {
+function makeExerciseEntry(exercise, date = state.activeDate) {
   const kind = exercise.kind || "strength";
   if (isMetricKind(kind)) {
     const targetCount = Math.max(1, Number(exercise.setCount) || 1);
@@ -3189,7 +3441,7 @@ function makeExerciseEntry(exercise) {
     unilateral,
     isometric,
     usesBodyweight,
-    bodyweight: usesBodyweight ? getDefaultBodyweight() : "",
+    bodyweight: usesBodyweight ? getDefaultBodyweight(date) : "",
     sets: Array.from({ length: exercise.setCount }, () => makeSet(unilateral)),
   };
 }
@@ -3222,9 +3474,8 @@ function makeUnilateralSet(source = {}) {
   };
 }
 
-function getDefaultBodyweight() {
-  const bodyweight = parseNumber(state.bodyweight);
-  return String(Number.isFinite(bodyweight) && bodyweight > 0 ? bodyweight : DEFAULT_BODYWEIGHT_KG);
+function getDefaultBodyweight(date = state.activeDate) {
+  return String(getBodyweightForDate(date));
 }
 
 function makeMetricAttempt(source = {}) {
@@ -3268,7 +3519,7 @@ function makeCustomItem(kind = "strength") {
 }
 
 function makePresetItem(exercise) {
-  const item = makeExerciseEntry(exercise);
+  const item = makeExerciseEntry(exercise, state.activeDate);
   item.id = `preset-${exercise.id}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   item.sourceId = exercise.id;
   return item;
@@ -3278,11 +3529,11 @@ function ensureExerciseEntry(workout, exerciseId) {
   if (!workout.exercises[exerciseId]) {
     const session = findSession(workout.sessionId);
     const exercise = session?.exercises.find((item) => item.id === exerciseId) || ex(exerciseId, exerciseId, 1);
-    workout.exercises[exerciseId] = makeExerciseEntry(exercise);
+    workout.exercises[exerciseId] = makeExerciseEntry(exercise, workout.date);
   }
   const session = findSession(workout.sessionId);
   const exercise = session?.exercises.find((item) => item.id === exerciseId) || ex(exerciseId, exerciseId, 1);
-  normalizeEntry(workout.exercises[exerciseId], exercise);
+  normalizeEntry(workout.exercises[exerciseId], exercise, workout.date);
   return workout.exercises[exerciseId];
 }
 
@@ -3292,21 +3543,21 @@ function normalizeWorkout(workout, session) {
   if (session.id === "overig") {
     Object.entries(workout.exercises).forEach(([exerciseId, entry]) => {
       const exercise = session.exercises.find((item) => item.id === exerciseId);
-      normalizeEntry(entry, exercise);
+      normalizeEntry(entry, exercise, workout.date);
     });
   } else {
     session.exercises.forEach((exercise) => {
       if (!workout.exercises[exercise.id]) {
-        workout.exercises[exercise.id] = makeExerciseEntry(exercise);
+        workout.exercises[exercise.id] = makeExerciseEntry(exercise, workout.date);
       } else {
-        normalizeEntry(workout.exercises[exercise.id], exercise);
+        normalizeEntry(workout.exercises[exercise.id], exercise, workout.date);
       }
     });
   }
-  workout.customItems.forEach((item) => normalizeEntry(item));
+  workout.customItems.forEach((item) => normalizeEntry(item, null, workout.date));
 }
 
-function normalizeEntry(entry, exercise) {
+function normalizeEntry(entry, exercise, date = "") {
   const kind = entry.kind || exercise?.kind || "strength";
   entry.kind = kind;
   if (!entry.name && exercise?.name) entry.name = getProgramExerciseName(exercise);
@@ -3339,8 +3590,9 @@ function normalizeEntry(entry, exercise) {
   entry.unilateral = unilateral;
   entry.isometric = isometric;
   entry.usesBodyweight = usesBodyweight;
+  const recordedBodyweight = date ? getRecordedBodyweight(date) : null;
   entry.bodyweight = usesBodyweight
-    ? String(parseNumber(entry.bodyweight) > 0 ? entry.bodyweight : getDefaultBodyweight())
+    ? String(recordedBodyweight?.value || (parseNumber(entry.bodyweight) > 0 ? entry.bodyweight : getDefaultBodyweight(date || state.activeDate)))
     : "";
   entry.sets = Array.isArray(entry.sets) ? entry.sets : [makeSet(unilateral)];
   entry.sets = entry.sets.map((set) => unilateral ? makeUnilateralSet(set) : makeStrengthSide(set));
@@ -3557,7 +3809,7 @@ function getLatestActivitySnapshot(target) {
     );
     if (!match) continue;
 
-    const snapshot = makeHistorySnapshot(match, historyEntry, { allowEmpty: true });
+    const snapshot = makeHistorySnapshot(match, historyEntry);
     if (snapshot) {
       cache.latestActivity.set(cacheKey, snapshot);
       return snapshot;
@@ -3584,7 +3836,7 @@ function getHistoryActivityEntries(historyEntry) {
     .map((exercise) => {
       const entry = workout.exercises?.[exercise.id];
       if (!entry) return null;
-      normalizeEntry(entry, exercise);
+      normalizeEntry(entry, exercise, historyEntry.date);
       return {
         name: getProgramExerciseName(exercise),
         kind: entry.kind || exercise.kind || "strength",
@@ -3596,7 +3848,7 @@ function getHistoryActivityEntries(historyEntry) {
   const customEntries = (workout.customItems || [])
     .filter((item) => item?.name)
     .map((item) => {
-      normalizeEntry(item);
+      normalizeEntry(item, null, historyEntry.date);
       return {
         name: item.name,
         kind: item.kind || "strength",
@@ -5254,12 +5506,24 @@ function syncViewFromHash() {
   document.querySelectorAll("[data-view-link]").forEach((link) => {
     link.classList.toggle("is-active", link.dataset.viewLink === view);
   });
+  requestAnimationFrame(scrollActiveViewTabIntoView);
   if (view === "stats" && els.chartCanvas) {
     renderStats();
   }
   if (view === "log" && els.historyList) {
     renderHistory();
   }
+  if (view === "weight" && els.weightHistory) {
+    renderWeightView();
+  }
+}
+
+function scrollActiveViewTabIntoView() {
+  const rail = document.querySelector(".view-tabs");
+  const active = rail?.querySelector("a.is-active");
+  if (!rail || !active || rail.scrollWidth <= rail.clientWidth) return;
+  const targetLeft = active.offsetLeft - ((rail.clientWidth - active.offsetWidth) / 2);
+  rail.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
 }
 
 function getActiveViewName() {

@@ -14,10 +14,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=148">
+  <link rel="stylesheet" href="styles.css?v=149">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=148" defer></script>
-  <script src="app.js?v=148" defer></script>
+  <script src="firebase-config.js?v=149" defer></script>
+  <script src="app.js?v=149" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -33,6 +33,10 @@
       <a href="#stats" data-view-link="stats">
         <i data-lucide="chart-no-axes-combined"></i>
         <span>Stats</span>
+      </a>
+      <a href="#weight" data-view-link="weight">
+        <i data-lucide="scale"></i>
+        <span>Gewicht</span>
       </a>
     </nav>
 
@@ -51,7 +55,7 @@
               </div>
               <div class="date-field">
                 <input id="training-date" type="hidden">
-                <button id="training-date-button" class="date-control" type="button" data-action="open-date-picker" aria-haspopup="dialog" aria-expanded="false">
+                <button id="training-date-button" class="date-control" type="button" data-action="open-date-picker" data-date-context="train" aria-haspopup="dialog" aria-expanded="false">
                   <span id="training-date-label">12-07-2026</span>
                   <i data-lucide="calendar-days"></i>
                 </button>
@@ -142,6 +146,28 @@
         </section>
       </section>
 
+      <section class="view" data-view="weight" aria-label="Gewicht">
+        <div class="weight-view-content">
+          <section class="weight-panel" aria-label="Daggewicht">
+            <div class="weight-heading">
+              <div>
+                <span class="panel-label">Daggewicht</span>
+                <strong id="weight-value-readout" class="weight-value">--</strong>
+              </div>
+              <button id="weight-date-button" class="date-control" type="button" data-action="open-date-picker" data-date-context="weight" aria-haspopup="dialog" aria-expanded="false">
+                <span id="weight-date-label">04-08-2026</span>
+                <i data-lucide="calendar-days"></i>
+              </button>
+            </div>
+            <label class="weight-input">
+              <input id="daily-bodyweight" type="text" inputmode="decimal" data-field="daily-bodyweight" placeholder="kg" autocomplete="off" aria-label="Lichaamsgewicht in kilogram">
+              <span>kg</span>
+            </label>
+          </section>
+          <div id="weight-history" class="weight-history"></div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -212,8 +238,8 @@
     </button>
   </div>
 
-  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=148" preload="auto" loop playsinline aria-hidden="true"></audio>
-  <audio id="side-alarm-audio" src="side-alarm.mp3?v=148" preload="auto" playsinline aria-hidden="true"></audio>
+  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=149" preload="auto" loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" src="side-alarm.mp3?v=149" preload="auto" playsinline aria-hidden="true"></audio>
 
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>
