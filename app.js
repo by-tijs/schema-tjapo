@@ -259,7 +259,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "155";
+const APP_VERSION = "156";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -546,6 +546,7 @@ function installListeners() {
   });
 
   els.importFile?.addEventListener("change", importData);
+  els.cloudAuth?.addEventListener("submit", handleCloudAuthSubmit);
 }
 
 function ensureDefaults() {
@@ -1807,7 +1808,7 @@ function runAction(trigger) {
   if (action === "delete-bodyweight") deleteBodyweight(trigger.dataset.date);
   if (action === "quick-export") exportData();
   if (action === "import-data") els.importFile?.click();
-  if (action === "cloud-login") cloudLogin();
+  if (action === "cloud-reset-password") cloudResetPassword();
   if (action === "cloud-sync-now") syncCloudNow();
   if (action === "cloud-logout") cloudLogout();
   if (action === "reset-all") resetAll();
@@ -3187,10 +3188,11 @@ function renderCloudSync() {
   const syncing = /laden|check|inloggen|maken/i.test(cloudSync.status);
   const failed = /mislukt/i.test(cloudSync.status);
   const cloudProtected = syncActive && !failed;
+  const account = cloudSync.user?.email || "Firebase-account";
   els.cloudStatus.textContent = syncActive && !syncing && !failed
     ? (cloudSync.lastSyncedAt
-      ? `Automatisch gesynchroniseerd · ${formatDateTimeShort(cloudSync.lastSyncedAt)}`
-      : "Automatische sync actief.")
+      ? `${account} · gesynct ${formatDateTimeShort(cloudSync.lastSyncedAt)}`
+      : `${account} · sync actief`)
     : cloudSync.status;
 
   const configured = Boolean(getFirebaseConfig());
@@ -3213,6 +3215,11 @@ function getCloudCredentials() {
   return { email, password };
 }
 
+function handleCloudAuthSubmit(event) {
+  event.preventDefault();
+  cloudLogin();
+}
+
 async function cloudLogin() {
   const credentials = getCloudCredentials();
   if (!credentials || !cloudSync.modules?.authMod || !cloudSync.auth) return;
@@ -3226,6 +3233,34 @@ async function cloudLogin() {
     cloudSync.status = "Inloggen mislukt.";
     renderCloudSync();
     showToast("Inloggen mislukt");
+  }
+}
+
+async function cloudResetPassword() {
+  const email = els.cloudEmail?.value.trim() || "";
+  if (!email || !email.includes("@")) {
+    showToast("Vul eerst je email in");
+    els.cloudEmail?.focus();
+    return;
+  }
+  if (!cloudSync.modules?.authMod || !cloudSync.auth) {
+    showToast("Firebase wordt nog geladen");
+    return;
+  }
+
+  try {
+    cloudSync.status = "Herstellink versturen...";
+    renderCloudSync();
+    cloudSync.auth.useDeviceLanguage?.();
+    await cloudSync.modules.authMod.sendPasswordResetEmail(cloudSync.auth, email);
+    cloudSync.status = "Herstellink verstuurd. Controleer je email.";
+    renderCloudSync();
+    showToast("Herstellink verstuurd");
+  } catch (error) {
+    const invalidEmail = ["auth/invalid-email", "auth/user-not-found"].includes(error?.code);
+    cloudSync.status = invalidEmail ? "Geen account voor dit emailadres." : "Herstellen mislukt.";
+    renderCloudSync();
+    showToast(invalidEmail ? "Controleer je emailadres" : "Herstellen mislukt");
   }
 }
 
