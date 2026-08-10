@@ -8,16 +8,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Schema Tjapo">
   <title>Schema Tjapo</title>
-  <link rel="manifest" href="manifest.webmanifest?v=161">
-  <link rel="icon" href="favicon.ico?v=161" type="image/x-icon" sizes="any">
-  <link rel="icon" href="favicon-32.png?v=161" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=161" sizes="180x180">
+  <link rel="manifest" href="manifest.webmanifest?v=164">
+  <link rel="icon" href="favicon.ico?v=164" type="image/x-icon" sizes="any">
+  <link rel="icon" href="favicon-32.png?v=164" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=164" sizes="180x180">
   <link rel="preload" href="fonts/kh-teka-regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=161">
-  <link rel="stylesheet" href="mono-preview.css?v=161">
+  <link rel="stylesheet" href="styles.css?v=164">
+  <link rel="stylesheet" href="mono-preview.css?v=164">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=161" defer></script>
-  <script src="app.js?v=161" defer></script>
+  <script src="firebase-config.js?v=164" defer></script>
+  <script src="app.js?v=164" defer></script>
 </head>
 <body>
   <div class="app-shell">
@@ -114,24 +114,33 @@
         <div id="records-list" class="records-list"></div>
         <section id="backup-panel" class="backup-panel chart-panel" aria-label="Sync en backup">
           <div class="cloud-panel" aria-label="Cloud sync">
-            <div>
+            <div class="sync-heading">
               <div class="record-title">Sync</div>
-              <div id="cloud-status" class="record-meta">Firebase nog niet ingesteld.</div>
+              <div class="sync-heading-status">
+                <div id="cloud-status" class="record-meta">Firebase nog niet ingesteld.</div>
+                <div id="cloud-user-actions" class="cloud-user-actions" hidden>
+                  <button class="icon-button" type="button" data-action="cloud-logout" title="Uitloggen" aria-label="Uitloggen">
+                    <i data-lucide="log-out"></i>
+                  </button>
+                </div>
+              </div>
             </div>
             <form id="cloud-auth" class="cloud-auth">
-              <input id="cloud-email" class="cloud-input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="email">
-              <input id="cloud-password" class="cloud-input" type="password" name="password" autocomplete="current-password" placeholder="wachtwoord">
-              <button class="mini-button" type="submit">Inloggen</button>
-              <button class="mini-button" type="button" data-action="cloud-reset-password">Herstel wachtwoord</button>
+              <label class="field cloud-field">
+                <span>E-mail</span>
+                <input id="cloud-email" class="cloud-input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false">
+              </label>
+              <label class="field cloud-field">
+                <span>Wachtwoord</span>
+                <input id="cloud-password" class="cloud-input" type="password" name="password" autocomplete="current-password">
+              </label>
+              <div class="cloud-auth-actions">
+                <button class="primary-button cloud-auth-submit" type="submit">Inloggen</button>
+                <button class="mini-button cloud-auth-reset" type="button" data-action="cloud-reset-password">Wachtwoord vergeten</button>
+              </div>
             </form>
-            <div id="cloud-user-actions" class="cloud-user-actions" hidden>
-              <button class="icon-button" type="button" data-action="cloud-logout" title="Uitloggen" aria-label="Uitloggen">
-                <i data-lucide="log-out"></i>
-              </button>
-            </div>
           </div>
           <div id="backup-fallback" class="backup-fallback">
-            <div class="record-meta">Lokale kopie voor zolang sync nog niet actief is.</div>
             <div class="data-actions">
               <button class="mini-button" type="button" data-action="quick-export">
                 <i data-lucide="download"></i>
@@ -142,7 +151,7 @@
                 <span>Import</span>
               </button>
             </div>
-            <div id="storage-readout" class="storage-readout"></div>
+            <div id="storage-readout" class="storage-readout" hidden></div>
           </div>
           <input id="import-file" type="file" accept="application/json,.json" hidden>
         </section>
@@ -240,8 +249,8 @@
     </button>
   </div>
 
-  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=161" preload="auto" loop playsinline aria-hidden="true"></audio>
-  <audio id="side-alarm-audio" src="side-alarm.mp3?v=161" preload="auto" playsinline aria-hidden="true"></audio>
+  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=164" preload="auto" loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" src="side-alarm.mp3?v=164" preload="auto" playsinline aria-hidden="true"></audio>
 
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>
