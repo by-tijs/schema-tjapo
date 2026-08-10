@@ -459,8 +459,7 @@ select {
 }
 
 .preset-chip,
-.mini-button,
-.activity-add .mini-button {
+.mini-button {
   min-height: 40px;
   border: 0;
   border-bottom: 1px solid var(--line);
@@ -468,14 +467,6 @@ select {
   background: transparent;
   color: var(--text-dim);
   font-weight: 400;
-}
-
-.activity-add .mini-button {
-  border-bottom: 0;
-}
-
-.activity-add .mini-button + .mini-button {
-  border-left: 1px solid var(--line-soft);
 }
 
 .finish-bar {
@@ -905,8 +896,10 @@ select {
   }
 
   .session-chip.is-active {
-    padding-left: 14px;
-    border-left: 1px solid var(--text);
+    padding-left: 0;
+    border-left: 0;
+    border-bottom-color: var(--text);
+    color: var(--text);
   }
 
   .training-panel {

@@ -259,7 +259,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "156";
+const APP_VERSION = "161";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -1137,6 +1137,16 @@ function refreshTrainingTimeEstimate() {
 }
 
 function renderOverigQuickAdd(session) {
+  const customButtons = `
+    <button class="preset-chip quick-action-chip" type="button" data-action="add-custom" data-kind="strength">
+      <i data-lucide="plus"></i>
+      <span>Lift</span>
+    </button>
+    <button class="preset-chip quick-action-chip" type="button" data-action="add-custom" data-kind="cardio">
+      <i data-lucide="timer"></i>
+      <span>Cardio</span>
+    </button>
+  `;
   const presetButtons = session.exercises
     .map((exercise) => `
       <button class="preset-chip" type="button" data-action="add-preset" data-preset-id="${escapeAttr(exercise.id)}">
@@ -1150,18 +1160,9 @@ function renderOverigQuickAdd(session) {
     <div class="quick-add">
       <div class="preset-strip-wrap">
         <div class="preset-strip" aria-label="Vaste opties">
+          ${customButtons}
           ${presetButtons}
         </div>
-      </div>
-      <div class="activity-add">
-        <button class="mini-button" type="button" data-action="add-custom" data-kind="strength">
-          <i data-lucide="plus"></i>
-          <span>Lift</span>
-        </button>
-        <button class="mini-button" type="button" data-action="add-custom" data-kind="cardio">
-          <i data-lucide="timer"></i>
-          <span>Cardio</span>
-        </button>
       </div>
     </div>
   `;
