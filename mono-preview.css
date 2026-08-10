@@ -546,6 +546,14 @@ select {
   color: var(--text);
 }
 
+.records-list > .record-item:last-child {
+  border-bottom: 0;
+}
+
+.records-list > .empty-state {
+  border: 0;
+}
+
 .history-list,
 .records-list,
 .stats-grid,
@@ -671,8 +679,8 @@ select {
 .cloud-panel {
   grid-template-columns: minmax(0, 1fr);
   gap: 18px;
-  padding-bottom: 18px;
-  border-bottom: 1px solid var(--line);
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .sync-heading {
@@ -702,6 +710,17 @@ select {
   grid-column: auto;
   grid-row: auto;
   flex: 0 0 auto;
+}
+
+.cloud-logout-button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0;
 }
 
 .cloud-auth {
@@ -769,6 +788,7 @@ select {
   font-size: clamp(4.5rem, 20vw, 8rem);
   font-weight: 400;
   line-height: 0.78;
+  white-space: nowrap;
 }
 
 .weight-input {
@@ -1112,5 +1132,10 @@ select {
 
   .chart-stage .empty-state {
     inset: 0;
+  }
+
+  .weight-value {
+    font-size: clamp(2rem, 9vw, 2.5rem);
+    line-height: 1;
   }
 }
