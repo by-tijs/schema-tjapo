@@ -1,24 +1,24 @@
 "use strict";
 
-const CACHE_NAME = "schema-tjapo-cache-v164";
+const CACHE_NAME = "schema-tjapo-cache-v173";
 const CORE_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=164",
-  "./mono-preview.css?v=164",
+  "./styles.css?v=173",
+  "./mono-preview.css?v=173",
   "./fonts/kh-teka-regular.woff2",
-  "./firebase-config.js?v=164",
-  "./app.js?v=164",
-  "./rest-alarm.mp3?v=164",
-  "./side-alarm.mp3?v=164",
-  "./audio-unlock.mp3?v=164",
-  "./manifest.webmanifest?v=164",
-  "./favicon.ico?v=164",
-  "./favicon-32.png?v=164",
-  "./apple-touch-icon.png?v=164",
-  "./icon-192.png?v=164",
-  "./icon-512.png?v=164",
-  "./icon-maskable-512.png?v=164",
+  "./firebase-config.js?v=173",
+  "./app.js?v=173",
+  "./rest-alarm.mp3?v=173",
+  "./side-alarm.mp3?v=173",
+  "./audio-unlock.mp3?v=173",
+  "./manifest.webmanifest?v=173",
+  "./favicon.ico?v=173",
+  "./favicon-32.png?v=173",
+  "./apple-touch-icon.png?v=173",
+  "./icon-192.png?v=173",
+  "./icon-512.png?v=173",
+  "./icon-maskable-512.png?v=173",
 ];
 
 self.addEventListener("install", (event) => {

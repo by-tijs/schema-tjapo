@@ -84,6 +84,9 @@ textarea:focus-visible {
 }
 
 .view-tabs {
+  --indicator-x: 0px;
+  --indicator-width: 0px;
+  --indicator-opacity: 0;
   padding: 0;
   gap: 0;
   border: 0;
@@ -92,6 +95,27 @@ textarea:focus-visible {
   background: rgba(5, 5, 5, 0.96);
   box-shadow: none;
   backdrop-filter: none;
+}
+
+.view-tabs::after,
+.segment-control::after,
+.filter-control::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  bottom: -1px;
+  left: 0;
+  width: var(--indicator-width);
+  height: 1px;
+  pointer-events: none;
+  background: var(--text);
+  opacity: var(--indicator-opacity);
+  transform: translate3d(var(--indicator-x), 0, 0);
+  transition:
+    width 0.42s cubic-bezier(0.65, 0, 0.35, 1),
+    transform 0.42s cubic-bezier(0.65, 0, 0.35, 1),
+    opacity 0.16s ease;
+  will-change: width, transform;
 }
 
 .view-tabs a {
@@ -104,20 +128,17 @@ textarea:focus-visible {
   font-weight: 400;
 }
 
+.view-tabs a:focus,
+.segment-control button:focus,
+.filter-control button:focus {
+  outline: 0;
+  box-shadow: none;
+}
+
 .view-tabs a.is-active {
   border: 0;
   background: transparent;
   color: var(--text);
-}
-
-.view-tabs a.is-active::after {
-  content: "";
-  position: absolute;
-  right: 22%;
-  bottom: 0;
-  left: 22%;
-  height: 1px;
-  background: var(--text);
 }
 
 .side-panel,
@@ -592,6 +613,10 @@ select {
 
 .segment-control,
 .filter-control {
+  --indicator-x: 0px;
+  --indicator-width: 0px;
+  --indicator-opacity: 0;
+  position: relative;
   border: 0;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -610,7 +635,6 @@ select {
 .segment-control button.is-active,
 .filter-control button.is-active {
   border: 0;
-  border-bottom: 1px solid var(--text);
   background: transparent;
   color: var(--text);
 }
@@ -710,14 +734,6 @@ select {
   min-height: 56px;
   background: var(--text);
   color: #050505;
-}
-
-.cloud-auth-reset {
-  justify-content: flex-start;
-  min-height: 42px;
-  padding-inline: 0;
-  border: 0;
-  color: var(--muted);
 }
 
 .backup-fallback {
@@ -855,59 +871,6 @@ select {
   animation: masked-page-enter 0.9s cubic-bezier(0.625, 0.05, 0, 1) both;
 }
 
-.view-tabs {
-  view-transition-name: app-navigation;
-}
-
-::view-transition-group(root),
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.9s;
-  animation-timing-function: cubic-bezier(0.625, 0.05, 0, 1);
-}
-
-::view-transition-old(root),
-::view-transition-new(root) {
-  mix-blend-mode: normal;
-  animation-fill-mode: both;
-}
-
-::view-transition-image-pair(root) {
-  isolation: isolate;
-}
-
-::view-transition-old(root) {
-  z-index: 1;
-  animation-name: masked-page-leave;
-}
-
-::view-transition-new(root) {
-  z-index: 2;
-  animation-name: masked-page-enter;
-}
-
-::view-transition-old(app-navigation) {
-  opacity: 0;
-  animation: none;
-}
-
-::view-transition-new(app-navigation) {
-  opacity: 1;
-  animation: none;
-}
-
-@keyframes masked-page-leave {
-  from {
-    filter: brightness(1);
-    transform: scale(1);
-  }
-
-  to {
-    filter: brightness(0.5);
-    transform: scale(1.05);
-  }
-}
-
 @keyframes masked-page-enter {
   from {
     clip-path: inset(50% round 3rem);
@@ -926,6 +889,12 @@ select {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .view-tabs::after,
+  .segment-control::after,
+  .filter-control::before {
+    transition: none;
+  }
+
   .training-panel.is-session-entering,
   .view.is-view-entering {
     animation: none;
@@ -953,11 +922,6 @@ select {
   .view-tabs a {
     min-width: 88px;
     padding-inline: 8px;
-  }
-
-  .view-tabs a.is-active::after {
-    right: 8px;
-    left: 8px;
   }
 
   main {
@@ -1058,6 +1022,10 @@ select {
     padding-right: max(8px, env(safe-area-inset-right));
     padding-bottom: env(safe-area-inset-bottom);
     padding-left: max(8px, env(safe-area-inset-left));
+  }
+
+  .view-tabs::after {
+    bottom: env(safe-area-inset-bottom);
   }
 
   .view-tabs a {

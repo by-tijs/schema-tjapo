@@ -259,7 +259,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "164";
+const APP_VERSION = "173";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -494,6 +494,7 @@ function bindElements() {
 }
 
 function installListeners() {
+  document.body.addEventListener("click", handleSlidingIndicatorIntent, true);
   document.body.addEventListener("click", handleClick);
   document.body.addEventListener("input", handleInput);
   document.body.addEventListener("change", handleChange);
@@ -538,6 +539,7 @@ function installListeners() {
     resizeTimer = setTimeout(() => {
       if (els.datePicker && !els.datePicker.hidden) positionDatePicker();
       if (getActiveViewName() === "stats") renderStats();
+      updateSlidingIndicators();
     }, 120);
   });
   window.addEventListener("beforeinstallprompt", (event) => {
@@ -719,6 +721,7 @@ function renderAll() {
   renderStorage();
   renderRestTimer();
   refreshIcons();
+  requestAnimationFrame(() => updateSlidingIndicators());
 }
 
 function renderSessionOptions() {
@@ -1810,7 +1813,6 @@ function runAction(trigger) {
   if (action === "delete-bodyweight") deleteBodyweight(trigger.dataset.date);
   if (action === "quick-export") exportData();
   if (action === "import-data") els.importFile?.click();
-  if (action === "cloud-reset-password") cloudResetPassword();
   if (action === "cloud-sync-now") syncCloudNow();
   if (action === "cloud-logout") cloudLogout();
   if (action === "reset-all") resetAll();
@@ -3250,34 +3252,6 @@ async function cloudLogin() {
   }
 }
 
-async function cloudResetPassword() {
-  const email = els.cloudEmail?.value.trim() || "";
-  if (!email || !email.includes("@")) {
-    showToast("Vul eerst je email in");
-    els.cloudEmail?.focus();
-    return;
-  }
-  if (!cloudSync.modules?.authMod || !cloudSync.auth) {
-    showToast("Firebase wordt nog geladen");
-    return;
-  }
-
-  try {
-    cloudSync.status = "Herstellink versturen...";
-    renderCloudSync();
-    cloudSync.auth.useDeviceLanguage?.();
-    await cloudSync.modules.authMod.sendPasswordResetEmail(cloudSync.auth, email);
-    cloudSync.status = "Herstellink verstuurd. Controleer je email.";
-    renderCloudSync();
-    showToast("Herstellink verstuurd");
-  } catch (error) {
-    const invalidEmail = ["auth/invalid-email", "auth/user-not-found"].includes(error?.code);
-    cloudSync.status = invalidEmail ? "Geen account voor dit emailadres." : "Herstellen mislukt.";
-    renderCloudSync();
-    showToast(invalidEmail ? "Controleer je emailadres" : "Herstellen mislukt");
-  }
-}
-
 async function cloudLogout() {
   if (!cloudSync.modules?.authMod || !cloudSync.auth) return;
   flushStateSave();
@@ -3788,7 +3762,7 @@ function getEntrySummary(entry, exercise) {
   const sets = entry.sets || [];
   const done = sets.filter((set) => hasCompleteStrengthSet(set, entry)).length;
   return {
-    label: `${sets.length || exercise?.setCount || 0} sets`,
+    label: `${sets.length} ${sets.length === 1 ? "set" : "sets"}`,
     counter: `${done}/${sets.length}`,
     done,
     total: sets.length,
@@ -4832,6 +4806,7 @@ function renderChartFilterControl(group, activeFilter) {
       </button>
     `)
     .join("");
+  requestAnimationFrame(() => updateSlidingIndicators(els.chartFilterControl.closest(".chart-controls")));
 }
 
 function getChartMetrics(group, filter = "all") {
@@ -5648,16 +5623,13 @@ function syncViewFromHash() {
   };
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (changedView && !reduceMotion && typeof document.startViewTransition === "function") {
-    document.startViewTransition(updateView);
-  } else {
-    updateView();
-    if (changedView && !reduceMotion) {
-      document.querySelectorAll(".view.is-view-entering").forEach((section) => section.classList.remove("is-view-entering"));
-      const activeView = document.querySelector(`[data-view="${view}"]`);
-      activeView?.classList.add("is-view-entering");
-      window.setTimeout(() => activeView?.classList.remove("is-view-entering"), 950);
-    }
+  updateView();
+  requestAnimationFrame(() => updateSlidingIndicators());
+  if (changedView && !reduceMotion) {
+    document.querySelectorAll(".view.is-view-entering").forEach((section) => section.classList.remove("is-view-entering"));
+    const activeView = document.querySelector(`[data-view="${view}"]`);
+    activeView?.classList.add("is-view-entering");
+    window.setTimeout(() => activeView?.classList.remove("is-view-entering"), 950);
   }
   hasSyncedView = true;
 }
@@ -5668,6 +5640,38 @@ function scrollActiveViewTabIntoView() {
   if (!rail || !active || rail.scrollWidth <= rail.clientWidth) return;
   const targetLeft = active.offsetLeft - ((rail.clientWidth - active.offsetWidth) / 2);
   rail.scrollTo({ left: Math.max(0, targetLeft), behavior: "smooth" });
+}
+
+function handleSlidingIndicatorIntent(event) {
+  const target = event.target.closest?.(".view-tabs a, .segment-control button, .filter-control button");
+  if (!target || target.disabled) return;
+  positionSlidingIndicator(target.parentElement, target);
+}
+
+function updateSlidingIndicators(root = document) {
+  const selector = ".view-tabs, .segment-control, .filter-control";
+  const controls = root.matches?.(selector) ? [root] : root.querySelectorAll(selector);
+  controls.forEach((control) => {
+    const active = control.querySelector(".is-active");
+    if (!active || control.hidden) {
+      control.style.setProperty("--indicator-opacity", "0");
+      return;
+    }
+
+    positionSlidingIndicator(control, active);
+  });
+}
+
+function positionSlidingIndicator(control, target) {
+  if (!control || !target) return;
+  let inset = 0;
+  if (control.classList.contains("view-tabs")) {
+    inset = window.matchMedia("(min-width: 720px)").matches ? 8 : target.offsetWidth * 0.22;
+  }
+
+  control.style.setProperty("--indicator-x", `${target.offsetLeft + inset}px`);
+  control.style.setProperty("--indicator-width", `${Math.max(0, target.offsetWidth - (inset * 2))}px`);
+  control.style.setProperty("--indicator-opacity", "1");
 }
 
 function getActiveViewName() {
