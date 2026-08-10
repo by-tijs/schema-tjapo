@@ -276,6 +276,7 @@ let suppressSessionClick = false;
 let suppressSessionClickUntil = 0;
 let suppressHorizontalClickUntil = 0;
 let suppressDatePickerClickUntil = 0;
+let hasSyncedView = false;
 const sessionRailDrag = {
   active: false,
   dragged: false,
@@ -2653,6 +2654,7 @@ function handleChange(event) {
 function selectSession(sessionId) {
   const session = findSession(sessionId);
   if (!session) return;
+  const changedSession = session.id !== state.activeSessionId;
   stopRestTimer();
   state.activeSessionId = session.id;
   clearEditingHistoryIfActiveTargetChanged();
@@ -2661,6 +2663,17 @@ function selectSession(sessionId) {
   collapseExerciseCards();
   saveState();
   renderAll();
+  if (changedSession) animateSessionChange();
+}
+
+function animateSessionChange() {
+  const panel = document.querySelector(".training-panel");
+  if (!panel || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  panel.classList.remove("is-session-entering");
+  void panel.offsetWidth;
+  panel.classList.add("is-session-entering");
+  panel.addEventListener("animationend", () => panel.classList.remove("is-session-entering"), { once: true });
 }
 
 function toggleExerciseCard(source) {
@@ -5614,25 +5627,38 @@ function syncViewFromHash() {
   const requestedView = (location.hash || "#train").replace("#", "");
   const availableViews = [...document.querySelectorAll("[data-view]")].map((section) => section.dataset.view);
   const view = availableViews.includes(requestedView) ? requestedView : "train";
+  const previousView = getActiveViewName();
+  const changedView = hasSyncedView && previousView !== view;
   if (view !== requestedView) {
     history.replaceState(null, "", "#train");
   }
-  document.querySelectorAll("[data-view]").forEach((section) => {
-    section.classList.toggle("is-active", section.dataset.view === view);
-  });
-  document.querySelectorAll("[data-view-link]").forEach((link) => {
-    link.classList.toggle("is-active", link.dataset.viewLink === view);
-  });
-  requestAnimationFrame(scrollActiveViewTabIntoView);
-  if (view === "stats" && els.chartCanvas) {
-    renderStats();
+
+  const updateView = () => {
+    document.querySelectorAll("[data-view]").forEach((section) => {
+      section.classList.toggle("is-active", section.dataset.view === view);
+    });
+    document.querySelectorAll("[data-view-link]").forEach((link) => {
+      link.classList.toggle("is-active", link.dataset.viewLink === view);
+    });
+    requestAnimationFrame(scrollActiveViewTabIntoView);
+    if (view === "stats" && els.chartCanvas) renderStats();
+    if (view === "log" && els.historyList) renderHistory();
+    if (view === "weight" && els.weightHistory) renderWeightView();
+  };
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (changedView && !reduceMotion && typeof document.startViewTransition === "function") {
+    document.startViewTransition(updateView);
+  } else {
+    updateView();
+    if (changedView && !reduceMotion) {
+      document.querySelectorAll(".view.is-view-entering").forEach((section) => section.classList.remove("is-view-entering"));
+      const activeView = document.querySelector(`[data-view="${view}"]`);
+      activeView?.classList.add("is-view-entering");
+      window.setTimeout(() => activeView?.classList.remove("is-view-entering"), 950);
+    }
   }
-  if (view === "log" && els.historyList) {
-    renderHistory();
-  }
-  if (view === "weight" && els.weightHistory) {
-    renderWeightView();
-  }
+  hasSyncedView = true;
 }
 
 function scrollActiveViewTabIntoView() {

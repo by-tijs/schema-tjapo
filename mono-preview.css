@@ -57,12 +57,15 @@ textarea {
 }
 
 button:focus-visible,
-a:focus-visible,
+a:focus-visible {
+  outline: 1px solid var(--text);
+  outline-offset: 2px;
+}
+
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 1px solid var(--text);
-  outline-offset: 2px;
+  outline: 0;
 }
 
 .app-shell {
@@ -396,6 +399,7 @@ textarea:focus,
 .setup-input:focus {
   border-color: var(--text);
   background: transparent;
+  box-shadow: none;
 }
 
 select {
@@ -446,8 +450,8 @@ select {
 }
 
 .quick-add {
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--text);
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .preset-strip-wrap::after {
@@ -464,6 +468,14 @@ select {
   background: transparent;
   color: var(--text-dim);
   font-weight: 400;
+}
+
+.activity-add .mini-button {
+  border-bottom: 0;
+}
+
+.activity-add .mini-button + .mini-button {
+  border-left: 1px solid var(--line-soft);
 }
 
 .finish-bar {
@@ -752,6 +764,91 @@ select {
   box-shadow: none;
 }
 
+.training-panel.is-session-entering {
+  animation: session-fade-in 0.2s ease-out both;
+}
+
+.view.is-view-entering {
+  animation: masked-page-enter 0.9s cubic-bezier(0.625, 0.05, 0, 1) both;
+}
+
+.view-tabs {
+  view-transition-name: app-navigation;
+}
+
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.9s;
+  animation-timing-function: cubic-bezier(0.625, 0.05, 0, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+  animation-fill-mode: both;
+}
+
+::view-transition-image-pair(root) {
+  isolation: isolate;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+  animation-name: masked-page-leave;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+  animation-name: masked-page-enter;
+}
+
+::view-transition-old(app-navigation) {
+  opacity: 0;
+  animation: none;
+}
+
+::view-transition-new(app-navigation) {
+  opacity: 1;
+  animation: none;
+}
+
+@keyframes masked-page-leave {
+  from {
+    filter: brightness(1);
+    transform: scale(1);
+  }
+
+  to {
+    filter: brightness(0.5);
+    transform: scale(1.05);
+  }
+}
+
+@keyframes masked-page-enter {
+  from {
+    clip-path: inset(50% round 3rem);
+    transform: translateY(50%);
+  }
+
+  to {
+    clip-path: inset(0);
+    transform: translateY(0);
+  }
+}
+
+@keyframes session-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .training-panel.is-session-entering,
+  .view.is-view-entering {
+    animation: none;
+  }
+}
+
 @media (min-width: 720px) {
   .app-shell {
     --desktop-sticky-gap: 0px;
@@ -827,11 +924,17 @@ select {
 
   .exercise-head {
     min-height: 76px;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    gap: 14px;
   }
 
   .exercise-index,
   .exercise-list[data-session-id] .exercise-index {
-    width: 62px;
+    width: 40px;
+    align-self: center;
+    justify-content: flex-start;
+    border: 0;
+    padding-top: 0;
     font-size: 1.55rem;
   }
 
