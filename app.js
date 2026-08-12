@@ -86,7 +86,7 @@ const sessions = [
       ex("cable-lat-prayer", "Cable lat prayer", 2, "hoogste"),
       compound("smith-shoulder-press", "Smith shoulder press", 2),
       ex("y-raises", "Y-raises", 2, "22"),
-      ex("supinated-db-bicep-curls", "Supinated db bicep curls", 2),
+      unilateral("supinated-db-bicep-curls", "Supinated db bicep curls", 2),
       unilateral("single-arm-pushdowns", "Single arm pushdowns", 2, "hoogste"),
       unilateral("smith-traps-upper-d", "Smith traps", 2),
     ],
@@ -259,7 +259,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "174";
+const APP_VERSION = "175";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
