@@ -130,7 +130,7 @@ const sessions = [
       unilateral("db-hamstring-curls-c", "Db hamstring curls", 2),
       unilateral("calve-raises-c", "Calve raises", 2),
       ex("neck-curls", "Neck curls", 2, "4"),
-      unilateral("single-arm-dead-hang", "Single arm dead hang", 2, "", { isometric: true, weightOptional: true }),
+      unilateral("single-arm-dead-hang", "Single arm dead hang", 2, "", { isometric: true, usesBodyweight: true, weightOptional: true }),
       ex("cable-crunches", "Cable crunches", 2, "hoogste"),
       unilateral("side-pressure", "Side pressure", 2, "-20"),
     ],
@@ -259,7 +259,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "176";
+const APP_VERSION = "177";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
