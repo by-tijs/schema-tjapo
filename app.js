@@ -157,6 +157,7 @@ const sessions = [
     exercises: [
       ex("hardlopen", "Hardlopen", 1, "run"),
       ex("airbike-1-minuut", "Echo Bike (1 minuut)", 1, "cardio"),
+      ex("airbike-30-minuten", "Echo Bike (30 minuten)", 1, "cardio", "", { defaultMetrics: { duration: "30" } }),
       ex("airbike-topspeed", "Echo Bike (Top Speed)", 1, "cardio"),
       compound("deadlift", "Deadlift", 2),
       compound("db-shoulder-press", "DB Shoulder Press", 2),
@@ -259,7 +260,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "177";
+const APP_VERSION = "178";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -3448,6 +3449,7 @@ function makeExerciseEntry(exercise, date = state.activeDate) {
   const kind = exercise.kind || "strength";
   if (isMetricKind(kind)) {
     const targetCount = Math.max(1, Number(exercise.setCount) || 1);
+    const defaultMetrics = { ...makeMetrics(), ...(exercise.defaultMetrics || {}) };
     return {
       kind,
       name: getProgramExerciseName(exercise),
@@ -3455,8 +3457,8 @@ function makeExerciseEntry(exercise, date = state.activeDate) {
       note: "",
       targetCount,
       done: false,
-      metrics: makeMetrics(),
-      attempts: Array.from({ length: targetCount }, () => makeMetricAttempt()),
+      metrics: { ...defaultMetrics },
+      attempts: Array.from({ length: targetCount }, () => makeMetricAttempt(defaultMetrics)),
     };
   }
   const unilateral = Boolean(exercise.unilateral);
@@ -4517,6 +4519,7 @@ function getLoggedPresetExercises(session, workout) {
 function getPresetShortLabel(name) {
   const labels = {
     "Echo Bike (1 minuut)": "Echo Bike 1m",
+    "Echo Bike (30 minuten)": "Echo Bike 30m",
     "Echo Bike (Top Speed)": "Echo Bike top",
     "DB Shoulder Press": "DB shoulder",
     "Incline DB press": "Incline DB",
