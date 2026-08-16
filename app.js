@@ -130,7 +130,7 @@ const sessions = [
       unilateral("db-hamstring-curls-c", "Db hamstring curls", 2),
       unilateral("calve-raises-c", "Calve raises", 2),
       ex("neck-curls", "Neck curls", 2, "4"),
-      unilateral("single-arm-dead-hang", "Single arm dead hang", 2),
+      unilateral("single-arm-dead-hang", "Single arm dead hang", 2, "", { isometric: true, weightOptional: true }),
       ex("cable-crunches", "Cable crunches", 2, "hoogste"),
       unilateral("side-pressure", "Side pressure", 2, "-20"),
     ],
@@ -259,7 +259,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "175";
+const APP_VERSION = "176";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -1307,6 +1307,7 @@ function renderEntryBody(entry, ref, removable = false, previous = [], placehold
 
   const unilateral = isUnilateralEntry(entry);
   const effortLabel = isIsometricEntry(entry) ? "sec" : "reps";
+  const weightLabel = getWeightFieldLabel(entry);
   const rows = (entry.sets || []).map((set, setIndex) => renderSetRow(ref, set, setIndex, last?.sets?.[setIndex], entry)).join("");
   const hasSets = (entry.sets || []).length > 0;
   return `
@@ -1315,7 +1316,7 @@ function renderEntryBody(entry, ref, removable = false, previous = [], placehold
       ${hasSets ? `
         <div class="set-field-labels${unilateral ? " is-unilateral" : ""}" aria-hidden="true">
           ${unilateral ? "<span>side</span>" : ""}
-          <span>${usesBodyweightLoad(entry) ? "+kg" : "kg"}</span>
+          <span>${weightLabel}</span>
           <span>${effortLabel}</span>
           <span>rpe</span>
         </div>
@@ -1470,7 +1471,7 @@ function renderSetRow(ref, set, setIndex, previousSet, entry) {
 
   return `
     <div class="set-row" ${getRefAttrs(ref)} data-set-index="${setIndex}">
-      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "weight", usesBodyweightLoad(entry) ? "+kg" : "kg"))}" data-field="weight" value="${escapeAttr(set.weight)}">
+      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "weight", getWeightFieldLabel(entry)))}" data-field="weight" value="${escapeAttr(set.weight)}" aria-label="${getWeightFieldAriaLabel(entry)}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "reps", isIsometricEntry(entry) ? "sec" : "reps"))}" data-field="reps" value="${escapeAttr(set.reps)}" aria-label="${isIsometricEntry(entry) ? "Seconden" : "Herhalingen"}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previousSet, "rpe", "RPE"))}" data-field="rpe" value="${escapeAttr(set.rpe)}">
     </div>
@@ -1484,7 +1485,7 @@ function renderStrengthSideRow(ref, set, setIndex, previousSet, side, entry) {
   return `
     <div class="set-row is-unilateral" ${getRefAttrs(ref)} data-set-index="${setIndex}" data-side="${side}">
       <span class="set-side" aria-label="${side === "left" ? "Links" : "Rechts"}">${label}</span>
-      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "weight", usesBodyweightLoad(entry) ? "+kg" : "kg"))}" data-field="weight" value="${escapeAttr(current.weight)}">
+      <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "weight", getWeightFieldLabel(entry)))}" data-field="weight" value="${escapeAttr(current.weight)}" aria-label="${label} ${getWeightFieldAriaLabel(entry)}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "reps", isIsometricEntry(entry) ? "sec" : "reps"))}" data-field="reps" value="${escapeAttr(current.reps)}" aria-label="${label} ${isIsometricEntry(entry) ? "seconden" : "herhalingen"}">
       <input type="text" inputmode="decimal" placeholder="${escapeAttr(getSetPlaceholder(previous, "rpe", "RPE"))}" data-field="rpe" value="${escapeAttr(current.rpe)}">
     </div>
@@ -3461,6 +3462,7 @@ function makeExerciseEntry(exercise, date = state.activeDate) {
   const unilateral = Boolean(exercise.unilateral);
   const usesBodyweight = Boolean(exercise.usesBodyweight);
   const isometric = Boolean(exercise.isometric);
+  const weightOptional = Boolean(exercise.weightOptional);
   return {
     kind: "strength",
     name: getProgramExerciseName(exercise),
@@ -3469,6 +3471,7 @@ function makeExerciseEntry(exercise, date = state.activeDate) {
     ...(Number.isFinite(Number(exercise.restSeconds)) ? { restSeconds: Number(exercise.restSeconds) } : {}),
     unilateral,
     isometric,
+    weightOptional,
     usesBodyweight,
     bodyweight: usesBodyweight ? getDefaultBodyweight(date) : "",
     sets: Array.from({ length: exercise.setCount }, () => makeSet(unilateral)),
@@ -3616,8 +3619,10 @@ function normalizeEntry(entry, exercise, date = "") {
   const unilateral = Boolean(entry.unilateral || exercise?.unilateral);
   const usesBodyweight = Boolean(entry.usesBodyweight || exercise?.usesBodyweight);
   const isometric = Boolean(entry.isometric || exercise?.isometric);
+  const weightOptional = Boolean(entry.weightOptional || exercise?.weightOptional);
   entry.unilateral = unilateral;
   entry.isometric = isometric;
+  entry.weightOptional = weightOptional;
   entry.usesBodyweight = usesBodyweight;
   const recordedBodyweight = date ? getRecordedBodyweight(date) : null;
   entry.bodyweight = usesBodyweight
@@ -4019,12 +4024,26 @@ function isIsometricEntry(entry) {
   return Boolean(entry?.isometric);
 }
 
+function isWeightOptionalEntry(entry) {
+  return Boolean(entry?.weightOptional);
+}
+
 function isUnilateralSet(set, entry = {}) {
   return Boolean(isUnilateralEntry(entry) || set?.left || set?.right);
 }
 
 function usesBodyweightLoad(entry) {
   return Boolean(entry?.usesBodyweight);
+}
+
+function getWeightFieldLabel(entry) {
+  if (usesBodyweightLoad(entry)) return "+kg";
+  return isWeightOptionalEntry(entry) ? "kg opt." : "kg";
+}
+
+function getWeightFieldAriaLabel(entry) {
+  if (usesBodyweightLoad(entry)) return "Extra gewicht in kg";
+  return isWeightOptionalEntry(entry) ? "Optioneel gewicht in kg" : "Gewicht in kg";
 }
 
 function getEntryBodyweight(entry) {
@@ -4055,7 +4074,7 @@ function getStrengthLoadLabel(set, entry = {}) {
 }
 
 function hasCompleteStrengthSide(set, entry = {}) {
-  const hasLoad = usesBodyweightLoad(entry) || hasMetricValue(set?.weight);
+  const hasLoad = usesBodyweightLoad(entry) || isWeightOptionalEntry(entry) || hasMetricValue(set?.weight);
   return Boolean(hasLoad && hasMetricValue(set?.reps) && hasMetricValue(set?.rpe));
 }
 
