@@ -188,6 +188,7 @@ const CHART_FILTERS = {
     { value: "push", label: "Push" },
     { value: "back", label: "Back" },
     { value: "shoulders", label: "Shoulders" },
+    { value: "traps", label: "Traps" },
     { value: "biceps", label: "Biceps" },
     { value: "triceps", label: "Triceps" },
   ],
@@ -260,7 +261,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "178";
+const APP_VERSION = "189";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -432,6 +433,7 @@ function setProgramExerciseName(exerciseId, value) {
 }
 
 function init() {
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   bindElements();
   installListeners();
   const migrated = ensureDefaults();
@@ -984,8 +986,8 @@ function renderDatePicker() {
   const currentMonth = parseDateLocal(monthStart).getMonth();
   const calendarStart = addDays(monthStart, -getMondayOffset(monthStart));
   const todayString = today();
-  const markedDates = getCalendarMarkedDates(uiState.datePickerContext);
-  const markedDateLabel = uiState.datePickerContext === "weight" ? "meting aanwezig" : "training aanwezig";
+  const calendarStates = getCalendarDateStates(uiState.datePickerContext);
+  const activeSession = findSession(state.activeSessionId);
 
   if (els.datePickerMonth) els.datePickerMonth.textContent = formatMonthTitle(monthStart);
   if (els.datePickerSelected) els.datePickerSelected.textContent = formatDateNumeric(selectedDate);
@@ -997,33 +999,84 @@ function renderDatePicker() {
     const dateString = addDays(calendarStart, index);
     const date = parseDateLocal(dateString);
     const day = date.getDate();
+    const dateState = calendarStates.get(dateString);
     const classes = [
       "calendar-day",
       date.getMonth() !== currentMonth ? "is-outside" : "",
       dateString === selectedDate ? "is-selected" : "",
       dateString === todayString ? "is-today" : "",
-      markedDates.has(dateString) ? "has-log" : "",
+      dateState?.hasAny ? "has-log" : "",
+      dateState?.hasActiveSession ? "has-active-session-log" : "",
+      dateState?.isLatestActiveSession ? "is-latest-active-session-log" : "",
+      dateState?.hasSkippedExercise ? "has-skipped-exercise" : "",
     ].filter(Boolean).join(" ");
-    const label = `${formatDate(dateString)}${markedDates.has(dateString) ? `, ${markedDateLabel}` : ""}`;
+    const statusLabels = [];
+    if (uiState.datePickerContext === "weight" && dateState?.hasAny) statusLabels.push("meting aanwezig");
+    if (uiState.datePickerContext === "train" && dateState?.hasAny) statusLabels.push("training aanwezig");
+    if (dateState?.hasActiveSession && activeSession) statusLabels.push(`${activeSession.label} aanwezig`);
+    if (dateState?.hasSkippedExercise) statusLabels.push("met overgeslagen oefening");
+    const label = [formatDate(dateString), ...statusLabels].join(", ");
     return `
       <button class="${classes}" type="button" data-action="calendar-select-date" data-date="${dateString}" aria-label="${escapeAttr(label)}" aria-pressed="${dateString === selectedDate ? "true" : "false"}">
         <span>${day}</span>
-        ${markedDates.has(dateString) ? "<i></i>" : ""}
+        ${dateState?.hasAny ? "<i></i>" : ""}
       </button>
     `;
   }).join("");
 }
 
-function getCalendarMarkedDates(context = "train") {
-  if (context === "weight") return new Set(Object.keys(state.bodyweights || {}));
-  const dates = new Set((state.history || [])
-    .filter((entry) => (Number(entry?.doneSets) || 0) > 0 || workoutHasCompletedItems(entry?.workout))
-    .map((entry) => entry.date)
-    .filter(Boolean));
-  Object.entries(state.workouts || {}).forEach(([key, workout]) => {
-    const date = key.split("::")[0];
-    if (date && workoutHasCompletedItems(workout)) dates.add(date);
+function getCalendarDateStates(context = "train") {
+  const dates = new Map();
+  const markDate = (date, update = {}) => {
+    if (!date) return;
+    const current = dates.get(date) || {
+      hasAny: false,
+      hasActiveSession: false,
+      isLatestActiveSession: false,
+      hasSkippedExercise: false,
+    };
+    Object.keys(current).forEach((key) => {
+      current[key] = current[key] || Boolean(update[key]);
+    });
+    dates.set(date, current);
+  };
+
+  if (context === "weight") {
+    Object.keys(state.bodyweights || {}).forEach((date) => markDate(date, { hasAny: true }));
+    return dates;
+  }
+
+  (state.history || []).forEach((entry) => {
+    const hasActivity = (Number(entry?.doneSets) || 0) > 0
+      || workoutHasCompletedItems(entry?.workout);
+    if (!entry?.date || !entry?.sessionId || !hasActivity) return;
+
+    const isActiveSession = entry.sessionId === state.activeSessionId;
+    const hasSkippedExercise = workoutHasSkippedExercises(entry.workout);
+    markDate(entry.date, {
+      hasAny: true,
+      hasActiveSession: isActiveSession,
+      hasSkippedExercise,
+    });
   });
+
+  Object.values(state.workouts || {}).forEach((workout) => {
+    if (!workout?.date || !workout?.sessionId || !workoutHasCompletedItems(workout)) return;
+    const isActiveSession = workout.sessionId === state.activeSessionId;
+    const hasSkippedExercise = workoutHasSkippedExercises(workout);
+    markDate(workout.date, {
+      hasAny: true,
+      hasActiveSession: isActiveSession,
+      hasSkippedExercise,
+    });
+  });
+
+  const latestActiveSessionDate = [...dates.entries()]
+    .filter(([, dateState]) => dateState.hasActiveSession)
+    .map(([date]) => date)
+    .sort((a, b) => b.localeCompare(a))[0];
+  if (latestActiveSessionDate) dates.get(latestActiveSessionDate).isLatestActiveSession = true;
+
   return dates;
 }
 
@@ -1035,6 +1088,24 @@ function workoutHasCompletedItems(workout) {
     }
     return (entry.sets || []).some((set) => hasCompleteStrengthSet(set, entry));
   });
+}
+
+function workoutHasSkippedExercises(workout) {
+  const session = findSession(workout?.sessionId);
+  if (!session || session.id === "overig") return false;
+
+  return session.exercises.some((exercise) => {
+    const entry = workout?.exercises?.[exercise.id];
+    if (!entry) return true;
+    if (isMetricEntry(entry)) return getMetricAttempts(entry, exercise).length === 0;
+    return (entry.sets || []).length === 0;
+  });
+}
+
+function workoutHasLoggedItems(workout) {
+  if (!workout) return false;
+  if (String(workout.note || "").trim()) return true;
+  return getAllWorkoutEntries(workout, findSession(workout.sessionId)).some(hasLoggedEntry);
 }
 
 function handleDatePickerPointerDown(event) {
@@ -1182,7 +1253,15 @@ function renderExerciseCard(exercise, workout, index, options = {}) {
   const isEditingName = isOpen && uiState.editingName === cardKey;
   const isEditingSetup = isOpen && uiState.editingSetup === cardKey;
   const exerciseName = getProgramExerciseName(exercise);
-  const target = { name: exerciseName, kind, setup: entry.setup };
+  const target = {
+    name: exerciseName,
+    kind,
+    setup: entry.setup,
+    sessionId: workout.sessionId,
+    exerciseId: exercise.id,
+    beforeDate: workout.date,
+    requiredCount: getActivityTargetCount(entry, exercise),
+  };
   const previous = isOpen ? getActivityHistory(target) : [];
   const placeholderSource = isOpen ? getLatestActivitySnapshot(target) : null;
   return `
@@ -1214,8 +1293,16 @@ function renderCustomCard(item, index, options = {}) {
   const cardKey = getRefKey(ref);
   const isOpen = uiState.expandedCards.has(cardKey);
   const isEditingName = isOpen && uiState.editingName === cardKey;
-  const previous = isOpen && item.name ? getActivityHistory({ name: item.name, kind }) : [];
-  const placeholderSource = isOpen && item.name ? getLatestActivitySnapshot({ name: item.name, kind }) : null;
+  const target = {
+    name: item.name,
+    kind,
+    setup: item.setup,
+    sessionId: state.activeSessionId,
+    beforeDate: state.activeDate,
+    requiredCount: getActivityTargetCount(item),
+  };
+  const previous = isOpen && item.name ? getActivityHistory(target) : [];
+  const placeholderSource = isOpen && item.name ? getLatestActivitySnapshot(target) : null;
   return `
     <article class="exercise-card${isOpen ? " is-open" : ""}" data-kind="${kind}" data-custom-index="${index}">
       <header class="exercise-head custom-head">
@@ -3795,6 +3882,9 @@ function getActivityTargetFromRef(ref, entry) {
       name: entry.name || "Extra",
       kind: getEntryKind(entry),
       setup: entry.setup || "",
+      sessionId: state.activeSessionId,
+      beforeDate: state.activeDate,
+      requiredCount: getActivityTargetCount(entry),
     };
   }
 
@@ -3804,22 +3894,42 @@ function getActivityTargetFromRef(ref, entry) {
     name: getProgramExerciseName(exercise) || entry.name || ref.exerciseId,
     kind: getEntryKind(entry),
     setup: entry.setup || exercise?.setup || "",
+    sessionId: state.activeSessionId,
+    exerciseId: exercise?.id || ref.exerciseId,
+    beforeDate: state.activeDate,
+    requiredCount: getActivityTargetCount(entry, exercise),
   };
+}
+
+function getActivityTargetCount(entry, exercise) {
+  if (isMetricEntry(entry)) return getMetricAttempts(entry, exercise).length;
+  return (entry?.sets || []).length;
 }
 
 function getActivityHistory(target, limit = 8) {
   const targetKind = target.kind || "strength";
   const targetKey = getActivityComparisonKey(target);
   const cache = getHistoryCache();
-  const cacheKey = getHistoryCacheKey(["activity", targetKind, targetKey, limit]);
+  const cacheKey = getHistoryCacheKey([
+    "activity",
+    targetKind,
+    targetKey,
+    target.sessionId,
+    target.exerciseId,
+    target.beforeDate,
+    limit,
+  ]);
   if (cache.activityHistory.has(cacheKey)) return cache.activityHistory.get(cacheKey);
 
   const rows = [];
 
   getSortedHistoryDesc()
     .forEach((historyEntry) => {
+      if (target.sessionId && historyEntry.sessionId !== target.sessionId) return;
+      if (target.beforeDate && historyEntry.date >= target.beforeDate) return;
       getHistoryActivityEntries(historyEntry).forEach((candidate) => {
         if (candidate.kind !== targetKind) return;
+        if (target.exerciseId && candidate.exerciseId !== target.exerciseId) return;
         if (getActivityComparisonKey(candidate) !== targetKey) return;
 
         const snapshot = makeHistorySnapshot(candidate, historyEntry);
@@ -3836,24 +3946,49 @@ function getLatestActivitySnapshot(target) {
   const targetKind = target.kind || "strength";
   const targetKey = getActivityComparisonKey(target);
   const cache = getHistoryCache();
-  const cacheKey = getHistoryCacheKey(["latest", targetKind, targetKey]);
+  const cacheKey = getHistoryCacheKey([
+    "latest",
+    targetKind,
+    targetKey,
+    target.sessionId,
+    target.exerciseId,
+    target.beforeDate,
+    target.requiredCount,
+  ]);
   if (cache.latestActivity.has(cacheKey)) return cache.latestActivity.get(cacheKey);
 
+  let latestPartial = null;
   for (const historyEntry of getSortedHistoryDesc()) {
+    if (target.sessionId && historyEntry.sessionId !== target.sessionId) continue;
+    if (target.beforeDate && historyEntry.date >= target.beforeDate) continue;
     const match = getHistoryActivityEntries(historyEntry).find((candidate) =>
-      candidate.kind === targetKind && getActivityComparisonKey(candidate) === targetKey
+      candidate.kind === targetKind
+      && (!target.exerciseId || candidate.exerciseId === target.exerciseId)
+      && getActivityComparisonKey(candidate) === targetKey
     );
     if (!match) continue;
 
     const snapshot = makeHistorySnapshot(match, historyEntry);
     if (snapshot) {
-      cache.latestActivity.set(cacheKey, snapshot);
-      return snapshot;
+      latestPartial ||= snapshot;
+      if (snapshotCoversTarget(snapshot, target.requiredCount)) {
+        cache.latestActivity.set(cacheKey, snapshot);
+        return snapshot;
+      }
     }
   }
 
-  cache.latestActivity.set(cacheKey, null);
-  return null;
+  cache.latestActivity.set(cacheKey, latestPartial);
+  return latestPartial;
+}
+
+function snapshotCoversTarget(snapshot, requiredCount = 0) {
+  const count = Math.max(0, Number(requiredCount) || 0);
+  if (!count) return true;
+  if (snapshot.kind === "strength") {
+    return Array.from({ length: count }, (_, index) => snapshot.sets?.[index]).every(Boolean);
+  }
+  return Array.from({ length: count }, (_, index) => snapshot.attempts?.[index]).every(Boolean);
 }
 
 function getHistoryActivityEntries(historyEntry) {
@@ -3876,6 +4011,7 @@ function getHistoryActivityEntries(historyEntry) {
       return {
         name: getProgramExerciseName(exercise),
         kind: entry.kind || exercise.kind || "strength",
+        exerciseId: exercise.id,
         entry,
       };
     })
@@ -4343,6 +4479,10 @@ function getTimeEstimatePreviousSnapshot(entry, exercise) {
     name: exercise ? getProgramExerciseName(exercise) : entry.name,
     kind: getEntryKind(entry),
     setup: entry.setup || exercise?.setup || "",
+    sessionId: state.activeSessionId,
+    exerciseId: exercise?.id,
+    beforeDate: state.activeDate,
+    requiredCount: getActivityTargetCount(entry, exercise),
   });
 }
 
@@ -4550,6 +4690,23 @@ function getHistoryProgressSummary(historyEntry) {
   if (!historyEntry?.workout || historyEntry.sessionId === "overig") return null;
   const cacheKey = historyEntry.id || getHistorySortKey(historyEntry);
   return getHistoryProgressSummaries().get(cacheKey) || null;
+}
+
+function isCompleteHistoryWorkout(historyEntry) {
+  const session = findSession(historyEntry?.sessionId);
+  const workout = historyEntry?.workout;
+  if (!session || !workout) return false;
+
+  const completion = getCompletion(workout);
+  if (completion.total <= 0 || completion.done < completion.total) return false;
+  if (session.id === "overig") return true;
+
+  return session.exercises.every((exercise) => {
+    const entry = workout.exercises?.[exercise.id];
+    if (!entry) return false;
+    if (isMetricEntry(entry)) return getMetricAttempts(entry, exercise).length > 0;
+    return (entry.sets || []).length > 0;
+  });
 }
 
 function getHistoryProgressSummaries() {
@@ -5067,7 +5224,8 @@ function getExerciseCategory(exercise, group) {
     if (/(curl|bicep)/.test(name)) return "biceps";
     if (/(jm press|pushdown|tricep)/.test(name)) return "triceps";
     if (/(pull up|pull ups|row|lat prayer)/.test(name)) return "back";
-    if (/(shoulder press|laterial|lateral|side delt|y-raise|y-raises|trap)/.test(name)) return "shoulders";
+    if (/trap/.test(name)) return "traps";
+    if (/(shoulder press|laterial|lateral|side delt|y-raise|y-raises)/.test(name)) return "shoulders";
     if (/(bench|press|dips)/.test(name)) return "push";
     return "push";
   }
@@ -5551,7 +5709,7 @@ function getCycleCompletionStreak() {
 }
 
 function isCompleteCycleHistoryEntry(historyEntry) {
-  if (!historyEntry || historyEntry.totalSets <= 0 || historyEntry.doneSets < historyEntry.totalSets) return false;
+  if (!isCompleteHistoryWorkout(historyEntry)) return false;
   const session = findSession(historyEntry.sessionId);
   const workout = historyEntry.workout;
   if (!session || !workout || !cycleOrder.includes(session.id)) return false;
@@ -5632,6 +5790,7 @@ function syncViewFromHash() {
   }
 
   const updateView = () => {
+    if (changedView) resetPageScroll();
     document.querySelectorAll("[data-view]").forEach((section) => {
       section.classList.toggle("is-active", section.dataset.view === view);
     });
@@ -5642,18 +5801,34 @@ function syncViewFromHash() {
     if (view === "stats" && els.chartCanvas) renderStats();
     if (view === "log" && els.historyList) renderHistory();
     if (view === "weight" && els.weightHistory) renderWeightView();
+    requestAnimationFrame(() => updateSlidingIndicators());
   };
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  updateView();
-  requestAnimationFrame(() => updateSlidingIndicators());
-  if (changedView && !reduceMotion) {
-    document.querySelectorAll(".view.is-view-entering").forEach((section) => section.classList.remove("is-view-entering"));
-    const activeView = document.querySelector(`[data-view="${view}"]`);
-    activeView?.classList.add("is-view-entering");
-    window.setTimeout(() => activeView?.classList.remove("is-view-entering"), 950);
+  const canUseViewTransition = changedView
+    && !reduceMotion
+    && typeof document.startViewTransition === "function";
+
+  document.querySelectorAll(".view.is-view-entering").forEach((section) => section.classList.remove("is-view-entering"));
+  if (canUseViewTransition) {
+    const transition = document.startViewTransition(updateView);
+    transition.finished.catch(() => {});
+  } else {
+    updateView();
+    if (changedView) requestAnimationFrame(resetPageScroll);
+    if (changedView && !reduceMotion) {
+      const activeView = document.querySelector(`[data-view="${view}"]`);
+      activeView?.classList.add("is-view-entering");
+      window.setTimeout(() => activeView?.classList.remove("is-view-entering"), 950);
+    }
   }
   hasSyncedView = true;
+}
+
+function resetPageScroll() {
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
 }
 
 function scrollActiveViewTabIntoView() {

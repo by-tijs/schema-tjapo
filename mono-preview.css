@@ -599,8 +599,9 @@ select {
 }
 
 .stat-card {
-  min-height: 94px;
+  min-height: 0;
   border-width: 0 1px 1px 0;
+  padding-block: 8px;
 }
 
 .stat-card strong {
@@ -889,6 +890,59 @@ select {
 
 .view.is-view-entering {
   animation: masked-page-enter 0.9s cubic-bezier(0.625, 0.05, 0, 1) both;
+}
+
+.view-tabs {
+  view-transition-name: app-navigation;
+}
+
+::view-transition-group(root),
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.9s;
+  animation-timing-function: cubic-bezier(0.625, 0.05, 0, 1);
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  mix-blend-mode: normal;
+  animation-fill-mode: both;
+}
+
+::view-transition-image-pair(root) {
+  isolation: isolate;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+  animation-name: masked-page-leave;
+}
+
+::view-transition-new(root) {
+  z-index: 2;
+  animation-name: masked-page-enter;
+}
+
+::view-transition-old(app-navigation) {
+  opacity: 0;
+  animation: none;
+}
+
+::view-transition-new(app-navigation) {
+  opacity: 1;
+  animation: none;
+}
+
+@keyframes masked-page-leave {
+  from {
+    filter: brightness(1);
+    transform: scale(1);
+  }
+
+  to {
+    filter: brightness(0.5);
+    transform: scale(1.05);
+  }
 }
 
 @keyframes masked-page-enter {

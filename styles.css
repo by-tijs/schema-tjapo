@@ -2106,11 +2106,30 @@ h1 {
   height: 4px;
   transform: translateX(-50%);
   border-radius: 50%;
-  background: var(--text-dim);
+  background: #fff;
+  box-shadow: none;
+}
+
+.calendar-day.is-latest-active-session-log {
+  color: #fff;
+}
+
+.calendar-day.has-skipped-exercise i {
+  width: 6px;
+  height: 6px;
+  bottom: 4px;
+  border: 1.5px solid var(--coral);
+  background: transparent;
+  box-shadow: none;
 }
 
 .calendar-day.is-selected i {
   background: #101214;
+}
+
+.calendar-day.is-selected.has-skipped-exercise i {
+  border-color: #101214;
+  background: transparent;
 }
 
 .confirm-actions {
