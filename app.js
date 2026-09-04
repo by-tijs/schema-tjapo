@@ -261,7 +261,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "189";
+const APP_VERSION = "190";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -318,7 +318,6 @@ const historyCache = {
   statsByRange: new Map(),
   statsAscByRange: new Map(),
   activityHistory: new Map(),
-  latestActivity: new Map(),
   entryActivities: new Map(),
   strengthIndexPoints: new Map(),
   historyProgressSummaries: null,
@@ -685,7 +684,6 @@ function getHistoryCache() {
     historyCache.statsByRange.clear();
     historyCache.statsAscByRange.clear();
     historyCache.activityHistory.clear();
-    historyCache.latestActivity.clear();
     historyCache.entryActivities.clear();
     historyCache.strengthIndexPoints.clear();
     historyCache.historyProgressSummaries = null;
@@ -1253,17 +1251,8 @@ function renderExerciseCard(exercise, workout, index, options = {}) {
   const isEditingName = isOpen && uiState.editingName === cardKey;
   const isEditingSetup = isOpen && uiState.editingSetup === cardKey;
   const exerciseName = getProgramExerciseName(exercise);
-  const target = {
-    name: exerciseName,
-    kind,
-    setup: entry.setup,
-    sessionId: workout.sessionId,
-    exerciseId: exercise.id,
-    beforeDate: workout.date,
-    requiredCount: getActivityTargetCount(entry, exercise),
-  };
+  const target = makeActivityHistoryTarget(entry, exercise, workout.date);
   const previous = isOpen ? getActivityHistory(target) : [];
-  const placeholderSource = isOpen ? getLatestActivitySnapshot(target) : null;
   return `
     <article class="exercise-card${isOpen ? " is-open" : ""}" data-kind="${kind}" data-exercise-id="${exercise.id}">
       <header class="exercise-head">
@@ -1280,7 +1269,7 @@ function renderExerciseCard(exercise, workout, index, options = {}) {
       </header>
       ${isOpen ? `
         ${renderPreviousPanel(previous, ref)}
-        ${renderEntryBody(entry, ref, false, previous, placeholderSource)}
+        ${renderEntryBody(entry, ref, false, previous)}
       ` : ""}
     </article>
   `;
@@ -1293,16 +1282,8 @@ function renderCustomCard(item, index, options = {}) {
   const cardKey = getRefKey(ref);
   const isOpen = uiState.expandedCards.has(cardKey);
   const isEditingName = isOpen && uiState.editingName === cardKey;
-  const target = {
-    name: item.name,
-    kind,
-    setup: item.setup,
-    sessionId: state.activeSessionId,
-    beforeDate: state.activeDate,
-    requiredCount: getActivityTargetCount(item),
-  };
+  const target = makeActivityHistoryTarget(item);
   const previous = isOpen && item.name ? getActivityHistory(target) : [];
-  const placeholderSource = isOpen && item.name ? getLatestActivitySnapshot(target) : null;
   return `
     <article class="exercise-card${isOpen ? " is-open" : ""}" data-kind="${kind}" data-custom-index="${index}">
       <header class="exercise-head custom-head">
@@ -1319,7 +1300,7 @@ function renderCustomCard(item, index, options = {}) {
       </header>
       ${isOpen ? `
         ${renderPreviousPanel(previous, ref)}
-        ${renderEntryBody(item, ref, false, previous, placeholderSource)}
+        ${renderEntryBody(item, ref, false, previous)}
       ` : ""}
     </article>
   `;
@@ -1383,9 +1364,9 @@ function getCardSubtitle(summary, entry) {
   return setup ? `${summary.label} - ${setup}` : summary.label;
 }
 
-function renderEntryBody(entry, ref, removable = false, previous = [], placeholderSource = previous[0]) {
+function renderEntryBody(entry, ref, removable = false, previous = []) {
   const refAttrs = getRefAttrs(ref);
-  const last = placeholderSource || previous[0];
+  const last = previous[clampHistoryCursor(getRefKey(ref), previous.length)];
   if (entry.kind === "run") {
     return renderRunBody(entry, ref, removable, last);
   }
@@ -2953,9 +2934,12 @@ function copyPreviousEntry(trigger) {
     entry.unilateral = Boolean(historyEntry.unilateral || entry.unilateral);
     entry.usesBodyweight = Boolean(historyEntry.usesBodyweight || entry.usesBodyweight);
     if (entry.usesBodyweight && historyEntry.bodyweight) entry.bodyweight = historyEntry.bodyweight;
-    entry.sets = historyEntry.sets
-      .filter(Boolean)
-      .map((set) => entry.unilateral ? makeUnilateralSet(set) : makeStrengthSide(set));
+    // Keep set positions and today's extra rows; never backfill from older sessions.
+    const setCount = Math.max(entry.sets?.length || 0, historyEntry.sets.length);
+    entry.sets = Array.from({ length: setCount }, (_, index) => {
+      const set = historyEntry.sets[index] || {};
+      return entry.unilateral ? makeUnilateralSet(set) : makeStrengthSide(set);
+    });
   } else {
     entry.kind = historyEntry.kind;
     const attempts = historyEntry.attempts?.filter(Boolean).length ? historyEntry.attempts.filter(Boolean) : [historyEntry];
@@ -3878,44 +3862,45 @@ function getRefKey(ref) {
 
 function getActivityTargetFromRef(ref, entry) {
   if (ref.customIndex !== undefined) {
-    return {
-      name: entry.name || "Extra",
-      kind: getEntryKind(entry),
-      setup: entry.setup || "",
-      sessionId: state.activeSessionId,
-      beforeDate: state.activeDate,
-      requiredCount: getActivityTargetCount(entry),
-    };
+    return makeActivityHistoryTarget(entry);
   }
 
   const session = findSession(state.activeSessionId);
   const exercise = session?.exercises.find((item) => item.id === ref.exerciseId);
+  return makeActivityHistoryTarget(entry, exercise);
+}
+
+function makeActivityHistoryTarget(entry, exercise = null, beforeDate = state.activeDate) {
   return {
-    name: getProgramExerciseName(exercise) || entry.name || ref.exerciseId,
+    name: exercise ? getProgramExerciseName(exercise) : entry.name || "Extra",
     kind: getEntryKind(entry),
-    setup: entry.setup || exercise?.setup || "",
-    sessionId: state.activeSessionId,
-    exerciseId: exercise?.id || ref.exerciseId,
-    beforeDate: state.activeDate,
-    requiredCount: getActivityTargetCount(entry, exercise),
+    setup: entry.setup ?? exercise?.setup ?? "",
+    entry,
+    beforeDate,
   };
 }
 
-function getActivityTargetCount(entry, exercise) {
-  if (isMetricEntry(entry)) return getMetricAttempts(entry, exercise).length;
-  return (entry?.sets || []).length;
+function getActivityHistoryKey(target) {
+  const key = getActivityComparisonKey(target);
+  if (isMetricKind(target.kind)) return key;
+  const entry = target.entry || target;
+  // Match the exercise across schedule slots, but not incompatible measurement types.
+  return getHistoryCacheKey([
+    key,
+    isUnilateralEntry(entry),
+    isIsometricEntry(entry),
+    usesBodyweightLoad(entry),
+  ]);
 }
 
 function getActivityHistory(target, limit = 8) {
   const targetKind = target.kind || "strength";
-  const targetKey = getActivityComparisonKey(target);
+  const targetKey = getActivityHistoryKey(target);
   const cache = getHistoryCache();
   const cacheKey = getHistoryCacheKey([
     "activity",
     targetKind,
     targetKey,
-    target.sessionId,
-    target.exerciseId,
     target.beforeDate,
     limit,
   ]);
@@ -3925,12 +3910,10 @@ function getActivityHistory(target, limit = 8) {
 
   getSortedHistoryDesc()
     .forEach((historyEntry) => {
-      if (target.sessionId && historyEntry.sessionId !== target.sessionId) return;
       if (target.beforeDate && historyEntry.date >= target.beforeDate) return;
       getHistoryActivityEntries(historyEntry).forEach((candidate) => {
         if (candidate.kind !== targetKind) return;
-        if (target.exerciseId && candidate.exerciseId !== target.exerciseId) return;
-        if (getActivityComparisonKey(candidate) !== targetKey) return;
+        if (getActivityHistoryKey(candidate) !== targetKey) return;
 
         const snapshot = makeHistorySnapshot(candidate, historyEntry);
         if (snapshot) rows.push(snapshot);
@@ -3943,52 +3926,8 @@ function getActivityHistory(target, limit = 8) {
 }
 
 function getLatestActivitySnapshot(target) {
-  const targetKind = target.kind || "strength";
-  const targetKey = getActivityComparisonKey(target);
-  const cache = getHistoryCache();
-  const cacheKey = getHistoryCacheKey([
-    "latest",
-    targetKind,
-    targetKey,
-    target.sessionId,
-    target.exerciseId,
-    target.beforeDate,
-    target.requiredCount,
-  ]);
-  if (cache.latestActivity.has(cacheKey)) return cache.latestActivity.get(cacheKey);
-
-  let latestPartial = null;
-  for (const historyEntry of getSortedHistoryDesc()) {
-    if (target.sessionId && historyEntry.sessionId !== target.sessionId) continue;
-    if (target.beforeDate && historyEntry.date >= target.beforeDate) continue;
-    const match = getHistoryActivityEntries(historyEntry).find((candidate) =>
-      candidate.kind === targetKind
-      && (!target.exerciseId || candidate.exerciseId === target.exerciseId)
-      && getActivityComparisonKey(candidate) === targetKey
-    );
-    if (!match) continue;
-
-    const snapshot = makeHistorySnapshot(match, historyEntry);
-    if (snapshot) {
-      latestPartial ||= snapshot;
-      if (snapshotCoversTarget(snapshot, target.requiredCount)) {
-        cache.latestActivity.set(cacheKey, snapshot);
-        return snapshot;
-      }
-    }
-  }
-
-  cache.latestActivity.set(cacheKey, latestPartial);
-  return latestPartial;
-}
-
-function snapshotCoversTarget(snapshot, requiredCount = 0) {
-  const count = Math.max(0, Number(requiredCount) || 0);
-  if (!count) return true;
-  if (snapshot.kind === "strength") {
-    return Array.from({ length: count }, (_, index) => snapshot.sets?.[index]).every(Boolean);
-  }
-  return Array.from({ length: count }, (_, index) => snapshot.attempts?.[index]).every(Boolean);
+  // One recorded set is enough. Missing sets stay empty in this same snapshot.
+  return getActivityHistory(target, 1)[0] || null;
 }
 
 function getHistoryActivityEntries(historyEntry) {
@@ -4009,7 +3948,7 @@ function getHistoryActivityEntries(historyEntry) {
       if (!entry) return null;
       normalizeEntry(entry, exercise, historyEntry.date);
       return {
-        name: getProgramExerciseName(exercise),
+        name: entry.name || getProgramExerciseName(exercise),
         kind: entry.kind || exercise.kind || "strength",
         exerciseId: exercise.id,
         entry,
@@ -4475,15 +4414,7 @@ function getTimeEstimateTasks(entry) {
 }
 
 function getTimeEstimatePreviousSnapshot(entry, exercise) {
-  return getLatestActivitySnapshot({
-    name: exercise ? getProgramExerciseName(exercise) : entry.name,
-    kind: getEntryKind(entry),
-    setup: entry.setup || exercise?.setup || "",
-    sessionId: state.activeSessionId,
-    exerciseId: exercise?.id,
-    beforeDate: state.activeDate,
-    requiredCount: getActivityTargetCount(entry, exercise),
-  });
+  return getLatestActivitySnapshot(makeActivityHistoryTarget(entry, exercise));
 }
 
 function getExerciseSetupSeconds(entry) {
