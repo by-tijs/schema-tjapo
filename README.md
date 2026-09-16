@@ -24,3 +24,9 @@ Train gebruikt de laatste geregistreerde uitvoering van dezelfde oefening en set
 ## Tests
 
 Voer de regressietests uit met `node --test tests/history.test.cjs`. De tests gebruiken synthetische data en maken geen verbinding met Firebase.
+
+## Lokaal profiel Jochem
+
+Open `index.html?profiel=jochem`. Dit profiel bevat Upper A–D en Overig zonder deadlift. Lower ontbreekt in de trainingskeuze, cyclus en statistieken. Ingevulde gegevens en lichaamsgewicht beginnen leeg en worden onder een eigen localStorage-sleutel bewaard. Het profiel maakt geen verbinding met Firebase, ook niet als op hetzelfde apparaat een cloudaccount is ingelogd.
+
+Gebruik steeds deze link, of voeg hem toe aan het beginscherm; het aparte manifest behoudt het profiel. De naam is een lokaal profiel, geen beveiligde login. De gegevens staan alleen in deze browser: gebruik Stats > Export/Import voor een backup of overdracht. De gewone URL blijft het bestaande schema met de bestaande opslag en cloudsync gebruiken.

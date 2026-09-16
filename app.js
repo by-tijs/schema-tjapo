@@ -1,6 +1,10 @@
 "use strict";
 
-const STORAGE_KEY = "herpakkingsseason.tracker.v1";
+// Named profiles are local to this browser and never connect to the owner's cloud account.
+const LOCAL_PROFILE = new URLSearchParams(location.search).get("profiel")?.trim().toLowerCase() === "jochem"
+  ? Object.freeze({ id: "jochem", name: "Jochem", upperOnly: true })
+  : null;
+const STORAGE_KEY = "herpakkingsseason.tracker.v1" + (LOCAL_PROFILE ? `:profile:${LOCAL_PROFILE.id}` : "");
 const REST_TIMER_COMPOUND_SECONDS = 5 * 60;
 const REST_TIMER_ISOLATION_SECONDS = 3 * 60;
 const REST_TIMER_SIDE_SECONDS = 30;
@@ -165,10 +169,15 @@ const sessions = [
       compound("db-press", "DB press", 2),
     ],
   },
-];
+].filter((session) => !LOCAL_PROFILE?.upperOnly || session.group !== "Lower")
+  .map((session) => LOCAL_PROFILE?.upperOnly && session.id === "overig"
+    ? { ...session, exercises: session.exercises.filter((exercise) => exercise.id !== "deadlift") }
+    : session);
 
-const cycleOrder = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-c", "lower-c", "upper-d", "lower-d"];
-const CHART_GROUPS = ["Upper", "Lower", "Running", "Gewicht"];
+const cycleOrder = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-c", "lower-c", "upper-d", "lower-d"]
+  .filter((id) => sessions.some((session) => session.id === id));
+const CHART_GROUPS = ["Upper", "Lower", "Running", "Gewicht"]
+  .filter((group) => !LOCAL_PROFILE?.upperOnly || group !== "Lower");
 const STRENGTH_INDEX_METRIC = "strength:index";
 const BODYWEIGHT_METRIC = "bodyweight:kg";
 const RUN_5K_METRIC = "run:5k-estimate";
@@ -213,7 +222,7 @@ const WEIGHT_DEPENDENT_E1RM_LOG_WEIGHT_COEFFICIENT = 4.58;
 // Stabilize the sparsely observed sub-5kg range so adding load cannot lower e1RM.
 const MIN_E1RM_CONVERSION_FACTOR = 4.58;
 const TAIL_SET_WEIGHT_DECAY = 0.67;
-const DEFAULT_BODYWEIGHT_KG = 94;
+const DEFAULT_BODYWEIGHT_KG = LOCAL_PROFILE ? NaN : 94;
 const STRENGTH_STANDARD_REFERENCE_BODYWEIGHT_KG = 95;
 const STRENGTH_STANDARD_ALLOMETRIC_EXPONENT = 0.67;
 // e1RM is an estimate; this prevents rounding noise at a tier boundary from flipping the label.
@@ -261,7 +270,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "190";
+const APP_VERSION = "191";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -434,6 +443,7 @@ function setProgramExerciseName(exerciseId, value) {
 function init() {
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   bindElements();
+  configureLocalProfile();
   installListeners();
   const migrated = ensureDefaults();
   if (migrated) flushStateSave();
@@ -441,6 +451,23 @@ function init() {
   registerServiceWorker();
   initCloudSync();
   refreshIcons();
+}
+
+function configureLocalProfile() {
+  if (!LOCAL_PROFILE) return;
+  document.title = `Schema ${LOCAL_PROFILE.name}`;
+  document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", `Schema ${LOCAL_PROFILE.name}`);
+  document.querySelector('link[rel="manifest"]')?.setAttribute("href", `manifest-${LOCAL_PROFILE.id}.webmanifest?v=${APP_VERSION}`);
+  const label = document.getElementById("profile-name");
+  if (label) {
+    label.textContent = LOCAL_PROFILE.name;
+    label.hidden = false;
+  }
+  document.querySelectorAll("[data-chart-group]").forEach((button) => {
+    if (!CHART_GROUPS.includes(button.dataset.chartGroup)) button.remove();
+  });
+  const syncTitle = document.querySelector(".sync-heading .record-title");
+  if (syncTitle) syncTitle.textContent = LOCAL_PROFILE.name;
 }
 
 function bindElements() {
@@ -572,7 +599,7 @@ function ensureDefaults() {
     state.weightDate = currentDate;
     changed = true;
   }
-  if (!state.activeSessionId) state.activeSessionId = getNextSession().id;
+  if (!findSession(state.activeSessionId)) state.activeSessionId = getNextSession().id;
   if (!Number.isInteger(state.cycleIndex)) state.cycleIndex = 0;
   if (state.cycleIndex < 0 || state.cycleIndex >= cycleOrder.length) state.cycleIndex = 0;
   state.cycleCompleted = Array.isArray(state.cycleCompleted)
@@ -592,7 +619,7 @@ function ensureDefaults() {
     }
   });
   if (!state.exerciseNames || Array.isArray(state.exerciseNames) || typeof state.exerciseNames !== "object") state.exerciseNames = {};
-  if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = String(DEFAULT_BODYWEIGHT_KG);
+  if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = LOCAL_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG);
   const migrated = migrateWeightedDipsBodyweight();
   if (state.editingHistoryId && !state.history.some((entry) => entry.id === state.editingHistoryId)) state.editingHistoryId = null;
   if (!CHART_GROUPS.includes(state.chartGroup)) state.chartGroup = "Upper";
@@ -1679,7 +1706,7 @@ function setDailyBodyweight(date, value) {
   if (!raw) {
     delete state.bodyweights[date];
     const latest = getBodyweightRecords()[0];
-    state.bodyweight = latest ? latest.value : String(DEFAULT_BODYWEIGHT_KG);
+    state.bodyweight = latest ? latest.value : (LOCAL_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG));
     syncBodyweightForDate(date, getBodyweightForDate(date));
     return true;
   }
@@ -1692,7 +1719,7 @@ function setDailyBodyweight(date, value) {
 }
 
 function syncBodyweightForDate(date, weight) {
-  const value = String(weight);
+  const value = Number.isFinite(weight) && weight > 0 ? String(weight) : "";
   Object.values(state.workouts || {}).forEach((workout) => {
     if (workout?.date === date) applyBodyweightToWorkout(workout, value);
   });
@@ -3107,7 +3134,9 @@ function resetCycle() {
   openConfirmModal({
     action: "reset-cycle",
     title: "Cyclus opnieuw beginnen?",
-    message: "Alle groene upper/lower cycluskleuren worden gewist. Overig doet niet mee.",
+    message: LOCAL_PROFILE?.upperOnly
+      ? "Alle groene upper cycluskleuren worden gewist. Overig doet niet mee."
+      : "Alle groene upper/lower cycluskleuren worden gewist. Overig doet niet mee.",
     confirmLabel: "Reset cyclus",
   });
 }
@@ -3185,7 +3214,7 @@ function exportData() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `schema-tjapo-${today()}.json`;
+  link.download = `schema-${LOCAL_PROFILE?.id || "tjapo"}-${today()}.json`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -3217,6 +3246,7 @@ function importData(event) {
 }
 
 function getFirebaseConfig() {
+  if (LOCAL_PROFILE) return null;
   const config = window.SCHEMA_TJAPO_FIREBASE_CONFIG;
   if (!config || typeof config !== "object") return null;
   if (!config.apiKey || !config.projectId || !config.authDomain || !config.appId) return null;
@@ -3226,7 +3256,9 @@ function getFirebaseConfig() {
 async function initCloudSync() {
   const config = getFirebaseConfig();
   if (!config) {
-    cloudSync.status = "Firebase nog niet ingesteld.";
+    cloudSync.status = LOCAL_PROFILE
+      ? "Opgeslagen op dit apparaat. Gebruik Export voor een backup."
+      : "Firebase nog niet ingesteld.";
     renderCloudSync();
     return;
   }
@@ -3580,7 +3612,8 @@ function makeUnilateralSet(source = {}) {
 }
 
 function getDefaultBodyweight(date = state.activeDate) {
-  return String(getBodyweightForDate(date));
+  const weight = getBodyweightForDate(date);
+  return Number.isFinite(weight) && weight > 0 ? String(weight) : "";
 }
 
 function makeMetricAttempt(source = {}) {
@@ -5310,7 +5343,8 @@ function getExerciseStrengthLevel(exerciseId, estimatedOneRepMax, bodyweight = g
   const normalizedBodyweight = Number.isFinite(bodyweight) && bodyweight > 0
     ? bodyweight
     : DEFAULT_BODYWEIGHT_KG;
-  if (!profile || !Number.isFinite(estimatedOneRepMax) || estimatedOneRepMax <= 0) return "";
+  if (!profile || !Number.isFinite(estimatedOneRepMax) || estimatedOneRepMax <= 0
+    || !Number.isFinite(normalizedBodyweight) || normalizedBodyweight <= 0) return "";
 
   const comparableLoad = profile.addedBodyweight
     ? estimatedOneRepMax - normalizedBodyweight

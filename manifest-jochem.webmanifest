@@ -1,8 +1,8 @@
 {
-  "name": "Schema Tjapo",
-  "short_name": "Schema Tjapo",
-  "description": "Dark minimal training tracker voor het schema.",
-  "start_url": "./index.html",
+  "name": "Schema Jochem",
+  "short_name": "Jochem",
+  "description": "Upper schema van Jochem met eigen voortgang.",
+  "start_url": "./index.html?profiel=jochem",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -27,5 +27,6 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "id": "./index.html?profiel=jochem"
 }
