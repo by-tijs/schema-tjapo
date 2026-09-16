@@ -2332,3 +2332,14 @@ h1 {
     grid-template-columns: 26px repeat(3, minmax(0, 1fr));
   }
 }
+
+.profile-access { min-height: 100svh; display: grid; place-items: center; padding: 28px 20px; }
+.profile-access-card { width: min(100%, 380px); }
+.profile-access-card h1 { margin-bottom: 18px; }
+.profile-access-card p { min-height: 42px; line-height: 1.5; }
+.profile-login { display: grid; gap: 20px; margin-top: 24px; }
+.profile-login .field { display: grid; gap: 8px; }
+.profile-login .cloud-input { width: 100%; min-width: 0; min-height: 46px; font-size: 16px; }
+.profile-login button { min-height: 46px; }
+.profile-conflict { margin-top: 20px; line-height: 1.5; }
+.profile-conflict button { margin: 4px 8px 4px 0; }

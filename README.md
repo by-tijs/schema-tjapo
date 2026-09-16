@@ -25,8 +25,16 @@ Train gebruikt de laatste geregistreerde uitvoering van dezelfde oefening en set
 
 Voer de regressietests uit met `node --test tests/history.test.cjs`. De tests gebruiken synthetische data en maken geen verbinding met Firebase.
 
-## Lokaal profiel Jochem
+## Account Jochem
 
-Open `index.html?profiel=jochem`. Dit profiel bevat Upper A–D en Overig zonder deadlift. Lower ontbreekt in de trainingskeuze, cyclus en statistieken. Ingevulde gegevens en lichaamsgewicht beginnen leeg en worden onder een eigen localStorage-sleutel bewaard. Het profiel maakt geen verbinding met Firebase, ook niet als op hetzelfde apparaat een cloudaccount is ingelogd.
+`index.html?profiel=jochem` opent het upper-profiel met gebruikersnaam `jochem`. Lower ontbreekt in trainingen, cyclus en statistieken; Overig bevat geen deadlift. Jochem kiest via zijn eenmalige activatielink zelf een wachtwoord (minimaal 12 tekens). De naam boven de trainingstitel is verwijderd.
 
-Gebruik steeds deze link, of voeg hem toe aan het beginscherm; het aparte manifest behoudt het profiel. De naam is een lokaal profiel, geen beveiligde login. De gegevens staan alleen in deze browser: gebruik Stats > Export/Import voor een backup of overdracht. De gewone URL blijft het bestaande schema met de bestaande opslag en cloudsync gebruiken.
+Firebase Authentication gebruikt intern een gereserveerd loginadres; er wordt geen e-mail verstuurd. Het account heeft een vaste UID en een aparte Firebase-app/authsessie. Firestore laat uitsluitend de eigenaar en Jochem hun eigen `schemaTjapo`-documenten lezen en schrijven. De profielnaam in de URL geeft op zichzelf geen toegang. Zonder persoonlijk e-mailadres verloopt accountherstel via de beheerder.
+
+Voortgang wordt onder de UID lokaal bewaard en naar Firestore gesynchroniseerd. Na inloggen wordt online voortgang opgehaald; nog niet gesynchroniseerde lokale wijzigingen blijven bewaard en worden bij herstel van de verbinding opnieuw geprobeerd. Bestaande lokale Jochem-invoer wordt bij de eerste login gekopieerd (de oude kopie blijft staan). De gewone URL behoudt de oorspronkelijke opslag en het schema van Tijs.
+
+Cloudschrijfacties gebruiken een transactie en revisienummer. Als een ander apparaat dezelfde voortgang heeft gewijzigd, wordt geen versie stilzwijgend overschreven. De gebruiker kiest de versie; de vervangen versie blijft als downloadbare lokale herstelkopie beschikbaar. Stats > Export/Import blijft beschikbaar voor eigen backups.
+
+Activatiesleutels en wachtwoorden horen nooit in deze repository. Een activatielink bevat het tijdelijke wachtwoord alleen in het URL-fragment. De app verwijdert dit uit de adresbalk en vervangt het tijdelijke wachtwoord bij activatie door het zelfgekozen wachtwoord. Een gebruikte link werkt daarna niet meer.
+
+Verificatie: `node --test tests/*.test.mjs`.

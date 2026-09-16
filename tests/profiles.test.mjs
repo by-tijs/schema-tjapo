@@ -11,7 +11,7 @@ function app(search = '', storage = new Map()) {
     window: { SCHEMA_TJAPO_FIREBASE_CONFIG: {apiKey:'test', projectId:'test', authDomain:'test', appId:'test'} },
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
   });
-  vm.runInContext(source + '\nsyncViewFromHash = () => {}; ensureDefaults();', context);
+  vm.runInContext(source + '\nsyncViewFromHash = () => {}; profileAccount = {authenticated:true,queueSave(){},markEdited(){}}; state = loadState(); ensureDefaults();', context);
   return { run: code => vm.runInContext(code, context), storage };
 }
 test('Jochem starts empty even on a browser containing the owner’s progress', () => {
@@ -42,12 +42,10 @@ test('Owner still has lower sessions, full cycle, and original bodyweight defaul
   assert.equal(owner.run('advanceCycle("upper-a"); getNextSession().id'),'lower-a');
   assert.equal(owner.run('getDefaultBodyweight()'),'94');
 });
-test('Local profile never initializes cloud sync, even with Firebase configured', async () => {
-  const j = app('?profiel=jochem');
-  assert.equal(j.run('getFirebaseConfig()'), null);
-  await j.run('initCloudSync()');
-  assert.equal(j.run('cloudSync.available'), false);
-  assert.notEqual(app().run('getFirebaseConfig()'), null);
+test('Cloud profile has its own UID storage while the owner keeps the existing key', () => {
+  assert.equal(app('?profiel=jochem').run('STORAGE_KEY'), ownerKey + ':user:4XLfELa1AoeC4tcqBdW3e4Bz29o1');
+  assert.equal(app().run('STORAGE_KEY'), ownerKey);
+  assert.equal(app('?profiel=jochem').run('USER_PROFILE.uid'), '4XLfELa1AoeC4tcqBdW3e4Bz29o1');
 });
 test('Bodyweight is personal, and clearing it leaves empty fields without fictitious records', () => {
   const j = app('?profiel=jochem');

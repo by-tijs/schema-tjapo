@@ -8,18 +8,38 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Schema Tjapo">
   <title>Schema Tjapo</title>
-  <link rel="manifest" href="manifest.webmanifest?v=191">
-  <link rel="icon" href="favicon.ico?v=191" type="image/x-icon" sizes="any">
-  <link rel="icon" href="favicon-32.png?v=191" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=191" sizes="180x180">
+  <link rel="manifest" href="manifest.webmanifest?v=196">
+  <link rel="icon" href="favicon.ico?v=196" type="image/x-icon" sizes="any">
+  <link rel="icon" href="favicon-32.png?v=196" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=196" sizes="180x180">
   <link rel="preload" href="fonts/kh-teka-regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=191">
-  <link rel="stylesheet" href="mono-preview.css?v=191">
+  <link rel="stylesheet" href="styles.css?v=196">
+  <link rel="stylesheet" href="mono-preview.css?v=196">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=191" defer></script>
-  <script src="app.js?v=191" defer></script>
+  <script src="firebase-config.js?v=196" defer></script>
+  <script src="profile-cloud.js?v=196" defer></script>
+  <script src="app.js?v=196" defer></script>
 </head>
 <body>
+  <section id="profile-access" class="profile-access" aria-labelledby="profile-access-title" hidden>
+    <div class="profile-access-card">
+      <h1 id="profile-access-title">Inloggen</h1>
+      <p id="profile-access-status" class="record-meta" role="status">Account laden…</p>
+      <form id="profile-login" class="profile-login">
+        <label class="field"><span>Gebruikersnaam</span>
+          <input id="profile-username" class="cloud-input" name="username" autocomplete="username" value="jochem" readonly>
+        </label>
+        <label class="field"><span>Wachtwoord</span>
+          <input id="profile-password" class="cloud-input" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <label id="profile-confirm-field" class="field" hidden><span>Herhaal wachtwoord</span>
+          <input id="profile-confirm" class="cloud-input" name="confirm-password" type="password" autocomplete="new-password">
+        </label>
+        <button id="profile-submit" class="primary-button" type="submit" disabled>Inloggen</button>
+        <button id="profile-login-instead" class="mini-button" type="button" hidden>Ik heb al een wachtwoord</button>
+      </form>
+    </div>
+  </section>
   <div class="app-shell">
     <nav class="view-tabs" aria-label="Navigatie">
       <a href="#train" data-view-link="train" class="is-active">
@@ -50,7 +70,6 @@
           <section class="training-panel">
             <div class="session-heading">
               <div class="session-title-block">
-                <span id="profile-name" class="panel-label" hidden></span>
                 <h1 id="train-title"><span id="train-title-label"></span><span id="train-progress-count" class="title-progress"></span></h1>
                 <span id="train-time-estimate" class="session-time-estimate" hidden></span>
               </div>
@@ -151,6 +170,12 @@
             </div>
             <div id="storage-readout" class="storage-readout" hidden></div>
           </div>
+          <div id="profile-conflict" class="profile-conflict" hidden>
+            <p>Er is ook op een ander apparaat voortgang gewijzigd. Van de versie die je vervangt blijft een herstelkopie beschikbaar.</p>
+            <button id="profile-use-cloud" class="mini-button" type="button">Online voortgang gebruiken</button>
+            <button id="profile-use-local" class="mini-button" type="button">Voortgang van dit apparaat gebruiken</button>
+          </div>
+          <button id="profile-recovery" class="mini-button" type="button" hidden>Herstelkopie downloaden</button>
           <input id="import-file" type="file" accept="application/json,.json" hidden>
         </section>
       </section>
@@ -247,8 +272,8 @@
     </button>
   </div>
 
-  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=191" preload="auto" loop playsinline aria-hidden="true"></audio>
-  <audio id="side-alarm-audio" src="side-alarm.mp3?v=191" preload="auto" playsinline aria-hidden="true"></audio>
+  <audio id="rest-alarm-audio" src="rest-alarm.mp3?v=196" preload="auto" loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" src="side-alarm.mp3?v=196" preload="auto" playsinline aria-hidden="true"></audio>
 
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>

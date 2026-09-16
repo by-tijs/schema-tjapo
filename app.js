@@ -1,10 +1,11 @@
 "use strict";
 
-// Named profiles are local to this browser and never connect to the owner's cloud account.
-const LOCAL_PROFILE = new URLSearchParams(location.search).get("profiel")?.trim().toLowerCase() === "jochem"
-  ? Object.freeze({ id: "jochem", name: "Jochem", upperOnly: true })
+// A profile selects an account; Firebase authentication and rules grant access.
+const USER_PROFILE = new URLSearchParams(location.search).get("profiel")?.trim().toLowerCase() === "jochem"
+  ? Object.freeze({ id: "jochem", name: "Jochem", upperOnly: true,
+      uid: "4XLfELa1AoeC4tcqBdW3e4Bz29o1", email: "jochem@schema-tjapo.invalid" })
   : null;
-const STORAGE_KEY = "herpakkingsseason.tracker.v1" + (LOCAL_PROFILE ? `:profile:${LOCAL_PROFILE.id}` : "");
+const STORAGE_KEY = "herpakkingsseason.tracker.v1" + (USER_PROFILE ? `:user:${USER_PROFILE.uid}` : "");
 const REST_TIMER_COMPOUND_SECONDS = 5 * 60;
 const REST_TIMER_ISOLATION_SECONDS = 3 * 60;
 const REST_TIMER_SIDE_SECONDS = 30;
@@ -169,15 +170,15 @@ const sessions = [
       compound("db-press", "DB press", 2),
     ],
   },
-].filter((session) => !LOCAL_PROFILE?.upperOnly || session.group !== "Lower")
-  .map((session) => LOCAL_PROFILE?.upperOnly && session.id === "overig"
+].filter((session) => !USER_PROFILE?.upperOnly || session.group !== "Lower")
+  .map((session) => USER_PROFILE?.upperOnly && session.id === "overig"
     ? { ...session, exercises: session.exercises.filter((exercise) => exercise.id !== "deadlift") }
     : session);
 
 const cycleOrder = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-c", "lower-c", "upper-d", "lower-d"]
   .filter((id) => sessions.some((session) => session.id === id));
 const CHART_GROUPS = ["Upper", "Lower", "Running", "Gewicht"]
-  .filter((group) => !LOCAL_PROFILE?.upperOnly || group !== "Lower");
+  .filter((group) => !USER_PROFILE?.upperOnly || group !== "Lower");
 const STRENGTH_INDEX_METRIC = "strength:index";
 const BODYWEIGHT_METRIC = "bodyweight:kg";
 const RUN_5K_METRIC = "run:5k-estimate";
@@ -222,7 +223,7 @@ const WEIGHT_DEPENDENT_E1RM_LOG_WEIGHT_COEFFICIENT = 4.58;
 // Stabilize the sparsely observed sub-5kg range so adding load cannot lower e1RM.
 const MIN_E1RM_CONVERSION_FACTOR = 4.58;
 const TAIL_SET_WEIGHT_DECAY = 0.67;
-const DEFAULT_BODYWEIGHT_KG = LOCAL_PROFILE ? NaN : 94;
+const DEFAULT_BODYWEIGHT_KG = USER_PROFILE ? NaN : 94;
 const STRENGTH_STANDARD_REFERENCE_BODYWEIGHT_KG = 95;
 const STRENGTH_STANDARD_ALLOMETRIC_EXPONENT = 0.67;
 // e1RM is an estimate; this prevents rounding noise at a tier boundary from flipping the label.
@@ -270,13 +271,15 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "191";
+const APP_VERSION = "196";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
 const CALENDAR_WEEKDAYS = ["ma", "di", "wo", "do", "vr", "za", "zo"];
 
-let state = loadState();
+let profileAccount = null;
+let profileInvitation = "";
+let state = USER_PROFILE ? {} : loadState();
 let toastTimer = null;
 let saveTimer = null;
 let stateDirty = false;
@@ -453,21 +456,45 @@ function init() {
   refreshIcons();
 }
 
-function configureLocalProfile() {
-  if (!LOCAL_PROFILE) return;
-  document.title = `Schema ${LOCAL_PROFILE.name}`;
-  document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", `Schema ${LOCAL_PROFILE.name}`);
-  document.querySelector('link[rel="manifest"]')?.setAttribute("href", `manifest-${LOCAL_PROFILE.id}.webmanifest?v=${APP_VERSION}`);
-  const label = document.getElementById("profile-name");
-  if (label) {
-    label.textContent = LOCAL_PROFILE.name;
-    label.hidden = false;
+function captureProfileInvitation() {
+  if (!USER_PROFILE) return;
+  const token = new URLSearchParams(location.hash.slice(1)).get("activate");
+  if (token && /^[A-Za-z0-9_-]{24,128}$/.test(token)) {
+    sessionStorage.setItem("schema-tjapo:jochem:activation", token);
+    history.replaceState(null, "", `${location.pathname}${location.search}#train`);
+    if (profileAccount) {
+      profileAccount.invitation = token;
+      profileAccount.notify("Kies een wachtwoord voor je account.");
+    }
   }
+  profileInvitation = sessionStorage.getItem("schema-tjapo:jochem:activation") || "";
+}
+
+function configureLocalProfile() {
+  if (!USER_PROFILE) return;
+  document.title = `Schema ${USER_PROFILE.name}`;
+  document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", `Schema ${USER_PROFILE.name}`);
+  document.querySelector('link[rel="manifest"]')?.setAttribute("href", `manifest-${USER_PROFILE.id}.webmanifest?v=${APP_VERSION}`);
   document.querySelectorAll("[data-chart-group]").forEach((button) => {
     if (!CHART_GROUPS.includes(button.dataset.chartGroup)) button.remove();
   });
-  const syncTitle = document.querySelector(".sync-heading .record-title");
-  if (syncTitle) syncTitle.textContent = LOCAL_PROFILE.name;
+  captureProfileInvitation();
+  document.querySelector(".app-shell").hidden = true;
+  document.getElementById("profile-access").hidden = false;
+  document.getElementById("profile-login").addEventListener("submit", (event) => {
+    event.preventDefault();
+    profileAccount?.submit(document.getElementById("profile-username").value,
+      document.getElementById("profile-password").value, document.getElementById("profile-confirm").value);
+  });
+  document.getElementById("profile-use-cloud").addEventListener("click", () => profileAccount?.resolveConflict(false));
+  document.getElementById("profile-use-local").addEventListener("click", () => profileAccount?.resolveConflict(true));
+  document.getElementById("profile-recovery").addEventListener("click", downloadProfileRecovery);
+  document.getElementById("profile-login-instead").addEventListener("click", () => {
+    profileInvitation = "";
+    sessionStorage.removeItem("schema-tjapo:jochem:activation");
+    if (profileAccount) { profileAccount.invitation = ""; profileAccount.notify("Log in met je eigen wachtwoord."); }
+  });
+  renderProfileAccount();
 }
 
 function bindElements() {
@@ -619,7 +646,7 @@ function ensureDefaults() {
     }
   });
   if (!state.exerciseNames || Array.isArray(state.exerciseNames) || typeof state.exerciseNames !== "object") state.exerciseNames = {};
-  if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = LOCAL_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG);
+  if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = USER_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG);
   const migrated = migrateWeightedDipsBodyweight();
   if (state.editingHistoryId && !state.history.some((entry) => entry.id === state.editingHistoryId)) state.editingHistoryId = null;
   if (!CHART_GROUPS.includes(state.chartGroup)) state.chartGroup = "Upper";
@@ -665,9 +692,9 @@ function migrateWeightedDipsBodyweight() {
   return changed;
 }
 
-function loadState() {
+function loadState(key = STORAGE_KEY) {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(key);
     if (!stored) return {};
     const parsed = JSON.parse(stored);
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -677,7 +704,10 @@ function loadState() {
 }
 
 function saveState(showSaved = false) {
-  if (!cloudSync.applyingRemote) stateDirty = true;
+  if (!cloudSync.applyingRemote) {
+    stateDirty = true;
+    if (USER_PROFILE) profileAccount?.markEdited();
+  }
   if (showSaved) {
     flushStateSave();
   } else {
@@ -692,6 +722,7 @@ function scheduleStateSave() {
 }
 
 function flushStateSave() {
+  if (USER_PROFILE && !profileAccount?.authenticated) return;
   clearTimeout(saveTimer);
   saveTimer = null;
   const shouldSync = stateDirty && !cloudSync.applyingRemote;
@@ -1706,7 +1737,7 @@ function setDailyBodyweight(date, value) {
   if (!raw) {
     delete state.bodyweights[date];
     const latest = getBodyweightRecords()[0];
-    state.bodyweight = latest ? latest.value : (LOCAL_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG));
+    state.bodyweight = latest ? latest.value : (USER_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG));
     syncBodyweightForDate(date, getBodyweightForDate(date));
     return true;
   }
@@ -3134,7 +3165,7 @@ function resetCycle() {
   openConfirmModal({
     action: "reset-cycle",
     title: "Cyclus opnieuw beginnen?",
-    message: LOCAL_PROFILE?.upperOnly
+    message: USER_PROFILE?.upperOnly
       ? "Alle groene upper cycluskleuren worden gewist. Overig doet niet mee."
       : "Alle groene upper/lower cycluskleuren worden gewist. Overig doet niet mee.",
     confirmLabel: "Reset cyclus",
@@ -3214,7 +3245,7 @@ function exportData() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `schema-${LOCAL_PROFILE?.id || "tjapo"}-${today()}.json`;
+  link.download = `schema-${USER_PROFILE?.id || "tjapo"}-${today()}.json`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -3245,8 +3276,76 @@ function importData(event) {
   reader.readAsText(file);
 }
 
+async function initProfileAccount() {
+  profileAccount = new window.ProfileAccount({
+    profile: USER_PROFILE, key: STORAGE_KEY,
+    legacyKey: `herpakkingsseason.tracker.v1:profile:${USER_PROFILE.id}`,
+    invitation: profileInvitation,
+    getState: () => state,
+    hasData: (candidate) => stateHasMeaningfulData(candidate)
+      || parseNumber(candidate?.bodyweight) > 0
+      || Object.keys(candidate?.exerciseNames || {}).length > 0,
+    onLoad: (candidate) => {
+      clearTimeout(saveTimer);
+      stateDirty = false;
+      cloudSync.applyingRemote = true;
+      state = structuredCloneSafe(candidate);
+      ensureDefaults();
+      flushStateSave();
+      cloudSync.applyingRemote = false;
+      collapseExerciseCards();
+      renderAll();
+    },
+    onStatus: renderProfileAccount,
+    clearPasswords: () => {
+      document.getElementById("profile-password").value = "";
+      document.getElementById("profile-confirm").value = "";
+    },
+  });
+  renderProfileAccount();
+  await profileAccount.init(getFirebaseConfig(), FIREBASE_SDK_VERSION);
+}
+
+function renderProfileAccount() {
+  if (!USER_PROFILE) return;
+  const account = profileAccount;
+  const activating = Boolean(account ? account.invitation : profileInvitation);
+  const loggedIn = Boolean(account?.authenticated && account?.ready && !activating);
+  const status = account?.status || "Account laden…";
+  document.querySelector(".app-shell").hidden = !loggedIn;
+  document.getElementById("profile-access").hidden = loggedIn;
+  document.getElementById("profile-access-title").textContent = activating ? "Kies je wachtwoord" : "Inloggen";
+  document.getElementById("profile-access-status").textContent = status;
+  document.getElementById("profile-confirm-field").hidden = !activating;
+  document.getElementById("profile-login-instead").hidden = !activating;
+  const password = document.getElementById("profile-password");
+  password.autocomplete = activating ? "new-password" : "current-password";
+  password.minLength = activating ? 12 : 1;
+  const submit = document.getElementById("profile-submit");
+  submit.textContent = activating ? "Account activeren" : "Inloggen";
+  submit.disabled = !account?.auth || Boolean(account.busy) || Boolean(account?.authenticated && !account.ready);
+  if (els.cloudStatus) els.cloudStatus.textContent = `jochem · ${status}`;
+  if (els.cloudAuth) els.cloudAuth.hidden = true;
+  if (els.cloudUserActions) els.cloudUserActions.hidden = !loggedIn;
+  if (els.backupFallback) els.backupFallback.hidden = false;
+  document.getElementById("profile-conflict").hidden = !account?.conflict;
+  document.getElementById("profile-recovery").hidden = !localStorage.getItem(`${STORAGE_KEY}:recovery`);
+}
+
+function downloadProfileRecovery() {
+  const backup = localStorage.getItem(`${STORAGE_KEY}:recovery`);
+  if (!backup) return;
+  const url = URL.createObjectURL(new Blob([backup], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `schema-jochem-herstel-${today()}.json`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function getFirebaseConfig() {
-  if (LOCAL_PROFILE) return null;
   const config = window.SCHEMA_TJAPO_FIREBASE_CONFIG;
   if (!config || typeof config !== "object") return null;
   if (!config.apiKey || !config.projectId || !config.authDomain || !config.appId) return null;
@@ -3254,11 +3353,10 @@ function getFirebaseConfig() {
 }
 
 async function initCloudSync() {
+  if (USER_PROFILE) return initProfileAccount();
   const config = getFirebaseConfig();
   if (!config) {
-    cloudSync.status = LOCAL_PROFILE
-      ? "Opgeslagen op dit apparaat. Gebruik Export voor een backup."
-      : "Firebase nog niet ingesteld.";
+    cloudSync.status = "Firebase nog niet ingesteld.";
     renderCloudSync();
     return;
   }
@@ -3283,6 +3381,12 @@ async function initCloudSync() {
     await authMod.setPersistence(cloudSync.auth, authMod.browserLocalPersistence);
 
     authMod.onAuthStateChanged(cloudSync.auth, (user) => {
+      if (user && user.uid !== "DYdNsg9kvTQ1DqQaTJK0HjUUPeD2") {
+        authMod.signOut(cloudSync.auth);
+        cloudSync.status = "Dit account hoort niet bij dit schema.";
+        renderCloudSync();
+        return;
+      }
       cloudSync.user = user;
       cloudSync.ready = true;
       cloudSync.loading = false;
@@ -3304,6 +3408,7 @@ async function initCloudSync() {
 }
 
 function renderCloudSync() {
+  if (USER_PROFILE) { renderProfileAccount(); return; }
   if (!els.cloudStatus) return;
   const syncActive = Boolean(cloudSync.available && cloudSync.ready && cloudSync.user);
   const syncing = /laden|check|inloggen|maken/i.test(cloudSync.status);
@@ -3358,6 +3463,7 @@ async function cloudLogin() {
 }
 
 async function cloudLogout() {
+  if (USER_PROFILE) { flushStateSave(); await profileAccount?.logout(); return; }
   if (!cloudSync.modules?.authMod || !cloudSync.auth) return;
   flushStateSave();
   await cloudSync.modules.authMod.signOut(cloudSync.auth);
@@ -3410,6 +3516,7 @@ async function reconcileCloudState() {
 }
 
 function scheduleCloudSave() {
+  if (USER_PROFILE) { profileAccount?.queueSave(); return; }
   if (!cloudSync.user || !cloudSync.ready || !cloudSync.modules?.firestoreMod) return;
   clearTimeout(cloudSync.timer);
   cloudSync.timer = setTimeout(() => {
@@ -3418,6 +3525,7 @@ function scheduleCloudSave() {
 }
 
 async function syncCloudNow() {
+  if (USER_PROFILE) { flushStateSave(); await profileAccount?.sync(); return; }
   if (!cloudSync.user) {
     showToast("Log eerst in");
     return;
@@ -5745,6 +5853,7 @@ function workoutKey(sessionId, date) {
 }
 
 function syncViewFromHash() {
+  captureProfileInvitation();
   const requestedView = (location.hash || "#train").replace("#", "");
   const availableViews = [...document.querySelectorAll("[data-view]")].map((section) => section.dataset.view);
   const view = availableViews.includes(requestedView) ? requestedView : "train";
