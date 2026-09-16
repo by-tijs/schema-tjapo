@@ -271,7 +271,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "196";
+const APP_VERSION = "197";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -364,6 +364,7 @@ const restTimer = {
   alarmMedia: null,
   audioContext: null,
   audioUnlocked: false,
+  audioGeneration: 0,
   alarmBuffers: {
     [REST_TIMER_ALARM_SET]: null,
     [REST_TIMER_ALARM_SIDE]: null,
@@ -546,6 +547,8 @@ function bindElements() {
   els.restAlarmActionLabel = document.getElementById("rest-alarm-action-label");
   els.restAlarmAudio = document.getElementById("rest-alarm-audio");
   els.sideAlarmAudio = document.getElementById("side-alarm-audio");
+  els.soundToggle = document.getElementById("sound-toggle");
+  els.soundToggleLabel = document.getElementById("sound-toggle-label");
   els.toast = document.getElementById("toast");
 }
 
@@ -610,6 +613,14 @@ function installListeners() {
 
 function ensureDefaults() {
   let changed = false;
+  if (typeof state.soundEnabled !== "boolean") {
+    state.soundEnabled = false;
+    changed = true;
+  }
+  if (!isSoundEnabled() && (restTimer.audioContext || restTimer.alarmMedia
+    || [els.restAlarmAudio, els.sideAlarmAudio].some((audio) => audio?.dataset.prepared === "true"))) {
+    disableRestTimerAudio();
+  }
   const currentDate = today();
   if (state.lastOpenedDate !== currentDate) {
     state.lastOpenedDate = currentDate;
@@ -770,6 +781,7 @@ function getHistoryCacheKey(parts) {
 }
 
 function renderAll() {
+  renderSoundSetting();
   renderSessionOptions();
   renderSessionRail();
   renderTraining();
@@ -1789,6 +1801,7 @@ function deleteBodyweight(date) {
 }
 
 function renderStats() {
+  renderSoundSetting();
   const last30 = getStatsHistory(30);
   const totalSets = state.history.reduce((sum, entry) => sum + (entry.doneSets || 0), 0);
   const last = getSortedHistoryDesc()[0];
@@ -1908,6 +1921,7 @@ function handleClick(event) {
 
 function runAction(trigger) {
   const action = trigger.dataset.action;
+  if (action === "toggle-sound") toggleSound();
   if (action === "select-session") selectSession(trigger.dataset.sessionId);
   if (action === "toggle-card") toggleExerciseCard(trigger);
   if (action === "add-set") addSet(trigger);
@@ -2288,7 +2302,7 @@ function openRestTimerAlarm() {
   refreshIcons();
 }
 
-function clearRestTimerAlarm() {
+function stopRestTimerAudio() {
   clearInterval(restTimer.alarmInterval);
   restTimer.alarmInterval = null;
   restTimer.alarmFallbackActive = false;
@@ -2311,9 +2325,13 @@ function clearRestTimerAlarm() {
   restTimer.alarmMedia = null;
   stopRestTimerMediaElement(els.restAlarmAudio);
   stopRestTimerMediaElement(els.sideAlarmAudio);
+  navigator.vibrate?.(0);
+}
+
+function clearRestTimerAlarm() {
+  stopRestTimerAudio();
   clearTimeout(restTimer.alarmHideTimeout);
   restTimer.alarmHideTimeout = null;
-  navigator.vibrate?.(0);
 
   if (!els.restAlarm || els.restAlarm.hidden) return;
   delete els.restAlarm.dataset.playback;
@@ -2360,7 +2378,52 @@ function formatRestTimerSeconds(seconds) {
   return `${minutes}:${String(total % 60).padStart(2, "0")}`;
 }
 
+function isSoundEnabled() {
+  return state.soundEnabled === true && (!USER_PROFILE || profileAccount?.authenticated === true);
+}
+
+function renderSoundSetting() {
+  const enabled = isSoundEnabled();
+  els.soundToggle?.setAttribute("aria-checked", String(enabled));
+  if (els.soundToggleLabel) els.soundToggleLabel.textContent = enabled ? "Aan" : "Uit";
+}
+
+function toggleSound() {
+  state.soundEnabled = !isSoundEnabled();
+  if (state.soundEnabled) unlockRestTimerAudio();
+  else disableRestTimerAudio();
+  renderSoundSetting();
+  saveState(true);
+}
+
+function disableRestTimerAudio() {
+  // Invalidate pending playback/priming before releasing the browser's audio session.
+  restTimer.audioGeneration += 1;
+  stopRestTimerAudio();
+  const context = restTimer.audioContext;
+  restTimer.audioContext = null;
+  restTimer.audioUnlocked = false;
+  if (context && context.state !== "closed") context.close().catch(() => {});
+  [els.restAlarmAudio, els.sideAlarmAudio].forEach((audio) => {
+    if (!audio) return;
+    audio.muted = true;
+    if (audio.hasAttribute("src")) {
+      audio.removeAttribute("src");
+      audio.load();
+    }
+    delete audio.dataset.prepared;
+    delete audio.dataset.unlocking;
+    delete audio.dataset.unlocked;
+    delete audio.dataset.unlockError;
+  });
+  for (const kind of [REST_TIMER_ALARM_SET, REST_TIMER_ALARM_SIDE]) {
+    restTimer.alarmBufferPromises[kind] = null;
+  }
+  if (els.restAlarm) delete els.restAlarm.dataset.playback;
+}
+
 function ensureRestTimerAudioContext() {
+  if (!isSoundEnabled()) return null;
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   if (!AudioContext) return null;
   if (!restTimer.audioContext || restTimer.audioContext.state === "closed") {
@@ -2371,9 +2434,11 @@ function ensureRestTimerAudioContext() {
 }
 
 function prepareRestTimerAudio() {
+  if (!isSoundEnabled()) return null;
   [els.restAlarmAudio, els.sideAlarmAudio].forEach((audio) => {
     if (!audio || audio.dataset.prepared === "true") return;
     audio.dataset.prepared = "true";
+    audio.setAttribute("src", audio.dataset.src);
     audio.load();
   });
   const context = ensureRestTimerAudioContext();
@@ -2384,9 +2449,11 @@ function prepareRestTimerAudio() {
 }
 
 function loadRestTimerAudioBuffer(context, kind, url) {
+  if (!isSoundEnabled()) return Promise.resolve(null);
   if (restTimer.alarmBuffers[kind]) return Promise.resolve(restTimer.alarmBuffers[kind]);
   if (restTimer.alarmBufferPromises[kind]) return restTimer.alarmBufferPromises[kind];
 
+  const generation = restTimer.audioGeneration;
   const promise = fetch(url, { cache: "force-cache" })
     .then((response) => {
       if (!response.ok) throw new Error("Alarm audio kon niet worden geladen.");
@@ -2394,12 +2461,13 @@ function loadRestTimerAudioBuffer(context, kind, url) {
     })
     .then((data) => context.decodeAudioData(data))
     .then((buffer) => {
+      if (!isSoundEnabled() || generation !== restTimer.audioGeneration) return null;
       restTimer.alarmBuffers[kind] = buffer;
       return buffer;
     })
     .catch(() => null)
     .finally(() => {
-      restTimer.alarmBufferPromises[kind] = null;
+      if (restTimer.alarmBufferPromises[kind] === promise) restTimer.alarmBufferPromises[kind] = null;
     });
 
   restTimer.alarmBufferPromises[kind] = promise;
@@ -2407,6 +2475,7 @@ function loadRestTimerAudioBuffer(context, kind, url) {
 }
 
 function unlockRestTimerAudio() {
+  if (!isSoundEnabled()) return;
   const context = prepareRestTimerAudio();
   primeNextRestTimerMediaElement();
   if (!context || (restTimer.audioUnlocked && context.state === "running")) return;
@@ -2420,6 +2489,7 @@ function unlockRestTimerAudio() {
   } catch {}
 
   const markUnlocked = () => {
+    if (!isSoundEnabled() || restTimer.audioContext !== context) return;
     restTimer.audioUnlocked = context.state === "running";
   };
   if (context.state === "running") {
@@ -2432,6 +2502,7 @@ function unlockRestTimerAudio() {
 }
 
 function primeNextRestTimerMediaElement() {
+  if (!isSoundEnabled()) return;
   const media = [els.restAlarmAudio, els.sideAlarmAudio].filter(Boolean);
   if (media.some((audio) => audio.dataset.unlocking === "true")) return;
   const locked = media.filter((audio) => audio.dataset.unlocked !== "true");
@@ -2442,8 +2513,10 @@ function primeNextRestTimerMediaElement() {
 }
 
 function primeRestTimerMediaElement(audio) {
+  if (!isSoundEnabled()) return;
   if (!audio || audio.dataset.unlocked === "true" || audio.dataset.unlocking === "true") return;
   audio.dataset.unlocking = "true";
+  const generation = restTimer.audioGeneration;
   const source = audio.getAttribute("src");
   const wasLooping = audio.loop;
   const wasMuted = audio.muted;
@@ -2453,6 +2526,7 @@ function primeRestTimerMediaElement(audio) {
   audio.load();
 
   const finish = (unlocked, error) => {
+    if (!isSoundEnabled() || generation !== restTimer.audioGeneration) return;
     audio.pause();
     try {
       audio.currentTime = 0;
@@ -2485,9 +2559,11 @@ function primeRestTimerMediaElement(audio) {
 }
 
 function recoverRestTimerAudio() {
+  if (!isSoundEnabled()) return;
   const context = restTimer.audioContext;
   if (context && context.state !== "closed" && context.state !== "running") {
     context.resume().then(() => {
+      if (!isSoundEnabled() || restTimer.audioContext !== context) return;
       restTimer.audioUnlocked = context.state === "running";
     }).catch(() => {
       restTimer.audioUnlocked = false;
@@ -2505,6 +2581,7 @@ function recoverRestTimerAudio() {
 }
 
 function playRestTimerAlarm() {
+  if (!isSoundEnabled()) return;
   if (restTimer.status !== "done" || restTimer.alarmPlaybackPending) return;
   if (restTimer.alarmSource) return;
   if (restTimer.alarmMedia && !restTimer.alarmMedia.paused) return;
@@ -2531,7 +2608,7 @@ function playRestTimerAlarm() {
       : resumeRestTimerAudioContext(context);
 
     Promise.all([bufferPromise, resumePromise]).then(([loadedBuffer]) => {
-      if (sequence !== restTimer.alarmSequence || restTimer.status !== "done") return;
+      if (!isSoundEnabled() || sequence !== restTimer.alarmSequence || restTimer.status !== "done") return;
       restTimer.alarmPlaybackPending = false;
       if (loadedBuffer && context.state === "running" && startRestTimerBufferAlarm(loadedBuffer)) return;
       playRestTimerMediaAlarm();
@@ -2551,6 +2628,7 @@ function waitForRestTimerAudioBuffer(bufferPromise) {
 }
 
 function resumeRestTimerAudioContext(context) {
+  if (!isSoundEnabled()) return Promise.resolve(false);
   return new Promise((resolve) => {
     let settled = false;
     const finish = (running) => {
@@ -2567,6 +2645,7 @@ function resumeRestTimerAudioContext(context) {
 }
 
 function startRestTimerBufferAlarm(buffer) {
+  if (!isSoundEnabled()) return false;
   if (restTimer.status !== "done" || restTimer.alarmSource) return false;
   const context = restTimer.audioContext;
   if (!context || context.state !== "running") return false;
@@ -2605,6 +2684,7 @@ function startRestTimerBufferAlarm(buffer) {
 }
 
 function playRestTimerMediaAlarm() {
+  if (!isSoundEnabled()) return;
   if (restTimer.status !== "done" || restTimer.alarmPlaybackPending || restTimer.alarmSource) return;
 
   const sideChange = restTimer.alarmKind === REST_TIMER_ALARM_SIDE;
@@ -2626,7 +2706,7 @@ function playRestTimerMediaAlarm() {
   } catch {}
 
   const started = () => {
-    if (sequence !== restTimer.alarmSequence || restTimer.status !== "done") {
+    if (!isSoundEnabled() || sequence !== restTimer.alarmSequence || restTimer.status !== "done") {
       stopRestTimerMediaElement(audio);
       return;
     }
@@ -2635,7 +2715,7 @@ function playRestTimerMediaAlarm() {
     navigator.vibrate?.(sideChange ? [70, 55, 120] : [80, 65, 80, 65, 180]);
   };
   const failed = (error) => {
-    if (sequence !== restTimer.alarmSequence || restTimer.status !== "done") return;
+    if (!isSoundEnabled() || sequence !== restTimer.alarmSequence || restTimer.status !== "done") return;
     restTimer.alarmPlaybackPending = false;
     restTimer.alarmMedia = null;
     if (els.restAlarm) els.restAlarm.dataset.mediaError = error?.name || "PlaybackError";
@@ -2660,6 +2740,7 @@ function stopRestTimerMediaElement(audio) {
 }
 
 function startRestTimerFallbackAlarm() {
+  if (!isSoundEnabled()) return;
   if (
     restTimer.status !== "done"
     || restTimer.alarmFallbackActive
@@ -2672,7 +2753,9 @@ function startRestTimerFallbackAlarm() {
     return;
   }
 
+  const sequence = restTimer.alarmSequence;
   const start = () => {
+    if (!isSoundEnabled() || sequence !== restTimer.alarmSequence || restTimer.audioContext !== context) return;
     if (restTimer.status !== "done" || restTimer.alarmFallbackActive || context.state !== "running") return;
     restTimer.alarmFallbackActive = true;
     if (els.restAlarm) els.restAlarm.dataset.playback = "fallback";
@@ -2692,6 +2775,7 @@ function startRestTimerFallbackAlarm() {
 }
 
 function playRestTimerFallbackSound() {
+  if (!isSoundEnabled()) return;
   if (restTimer.status !== "done") return;
   const context = restTimer.audioContext;
   if (!context || context.state !== "running") return;
