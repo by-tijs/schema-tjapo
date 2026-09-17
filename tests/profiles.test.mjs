@@ -113,3 +113,37 @@ test('Decimal entry preserves the typed comma while saving a decimal distance an
   assert.equal(j.run('calculateRunPace({distance:"5,25",duration:"26:15"})'), '5:00');
   assert.equal(j.run('normalizeInputValue({value:"12",dataset:{field:"rpe"}})'), '10');
 });
+
+test('Jochem’s inherited 94kg is cleared from saved workouts and history when no own measurement exists', () => {
+  const j = app('?profiel=jochem');
+  j.run(`state.bodyweight = '94'; state.bodyweights = {};
+    const oldDips = getWorkout('upper-b','2026-09-16');
+    oldDips.exercises['weighted-dips'].bodyweight = '94';
+    oldDips.exercises['weighted-dips'].sets[0] = {weight:'10',reps:'6',rpe:'9'};
+    const oldPullups = getWorkout('upper-a','2026-09-16');
+    oldPullups.exercises['weighted-pull-ups'].bodyweight = '94';
+    state.history = [{id:'kept',date:oldDips.date,sessionId:oldDips.sessionId,workout:structuredClone(oldDips)}];
+    ensureDefaults(); flushStateSave();`);
+  assert.equal(j.run('state.bodyweight'), '');
+  assert.equal(j.run('oldDips.exercises["weighted-dips"].bodyweight'), '');
+  assert.equal(j.run('oldPullups.exercises["weighted-pull-ups"].bodyweight'), '');
+  assert.equal(j.run('state.history[0].workout.exercises["weighted-dips"].bodyweight'), '');
+  assert.equal(j.run('state.history[0].workout.exercises["weighted-dips"].sets[0].reps'), '6');
+  assert.equal(app('?profiel=jochem',j.storage).run('getDefaultBodyweight()'), '');
+  assert.equal(j.run('ensureDefaults()'), false);
+  assert.equal(app().run('getDefaultBodyweight()'), '94');
+});
+
+test('Jochem’s own non-default weight replaces old 94kg even without a daily measurement', () => {
+  const j = app('?profiel=jochem');
+  j.run(`state.bodyweight='81'; const w=getWorkout('upper-b','2026-09-17');
+    w.exercises['weighted-dips'].bodyweight='94'; ensureDefaults();`);
+  assert.equal(j.run('w.exercises["weighted-dips"].bodyweight'), '81');
+});
+
+test('An explicitly recorded personal weight of 94kg remains valid for Jochem', () => {
+  const j = app('?profiel=jochem');
+  j.run(`setDailyBodyweight('2026-09-16','94'); ensureDefaults();`);
+  assert.equal(j.run('state.bodyweight'), '94');
+  assert.equal(j.run('getWorkout("upper-b","2026-09-17").exercises["weighted-dips"].bodyweight'), '94');
+});

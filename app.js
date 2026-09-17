@@ -277,7 +277,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "198";
+const APP_VERSION = "199";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -665,6 +665,12 @@ function ensureDefaults() {
   if (!state.exerciseNames || Array.isArray(state.exerciseNames) || typeof state.exerciseNames !== "object") state.exerciseNames = {};
   if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = USER_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG);
   const latestBodyweight = getBodyweightRecords()[0];
+  // Older copies of the shared schema carried the owner's 94kg default.
+  // Jochem must explicitly record that weight before it can be treated as his.
+  if (USER_PROFILE && !latestBodyweight && parseNumber(state.bodyweight) === 94) {
+    state.bodyweight = "";
+    changed = true;
+  }
   if (latestBodyweight && state.bodyweight !== latestBodyweight.value) {
     state.bodyweight = latestBodyweight.value;
     changed = true;
@@ -1807,13 +1813,16 @@ function applyBodyweightToWorkout(workout, value) {
 function syncRecordedBodyweights() {
   let changed = false;
   const syncWorkout = (workout) => {
+    if (!workout) return false;
     const recorded = getRecordedBodyweightOnOrBefore(workout?.date);
-    if (!recorded) return false;
     let workoutChanged = false;
     const entries = [...Object.values(workout.exercises || {}), ...(workout.customItems || [])];
     entries.forEach((entry) => {
-      if (entry?.usesBodyweight && parseNumber(entry.bodyweight) !== recorded.weight) {
-        entry.bodyweight = String(recorded.weight);
+      if (!entry?.usesBodyweight) return;
+      const personalWeight = recorded ? String(recorded.weight)
+        : USER_PROFILE && parseNumber(entry.bodyweight) === 94 ? getDefaultBodyweight(workout.date) : entry.bodyweight;
+      if (entry.bodyweight !== personalWeight) {
+        entry.bodyweight = personalWeight;
         workoutChanged = true;
       }
     });
@@ -3968,8 +3977,10 @@ function normalizeEntry(entry, exercise, date = "") {
   entry.weightOptional = weightOptional;
   entry.usesBodyweight = usesBodyweight;
   const recordedBodyweight = date ? getRecordedBodyweightOnOrBefore(date) : null;
+  const storedBodyweight = USER_PROFILE && parseNumber(entry.bodyweight) === 94
+    ? getDefaultBodyweight(date || state.activeDate) : entry.bodyweight;
   entry.bodyweight = usesBodyweight
-    ? String(recordedBodyweight?.value || (parseNumber(entry.bodyweight) > 0 ? entry.bodyweight : getDefaultBodyweight(date || state.activeDate)))
+    ? String(recordedBodyweight?.value || (parseNumber(storedBodyweight) > 0 ? storedBodyweight : getDefaultBodyweight(date || state.activeDate)))
     : "";
   entry.sets = Array.isArray(entry.sets) ? entry.sets : [makeSet(unilateral)];
   entry.sets = entry.sets.map((set) => unilateral ? makeUnilateralSet(set) : makeStrengthSide(set));
