@@ -151,6 +151,7 @@ class ProfileAccount {
     try {
       let remote;
       let uploaded = false;
+      let migratedRemote = false;
       if (pending) {
         const mutationId = this.meta.mutationId || crypto.randomUUID();
         this.meta.mutationId = mutationId;
@@ -181,7 +182,7 @@ class ProfileAccount {
       if (!pending && !remote) this.meta.pending = true;
       if (remote?.state) {
         if (!uploaded && this.localVersion === version
-          && (!this.meta.hasRemote || (remote.revision || 0) !== baseRevision)) this.onLoad(remote.state);
+          && (!this.meta.hasRemote || (remote.revision || 0) !== baseRevision)) migratedRemote = Boolean(this.onLoad(remote.state));
         this.meta.hasRemote = true;
         this.meta.revision = remote.revision || 0;
         this.meta.savedAt = remote.savedAt;
@@ -191,6 +192,8 @@ class ProfileAccount {
         delete this.meta.mutationId;
       }
       this.saveMeta();
+      // Persist app migrations only after adopting the server revision they were based on.
+      if (migratedRemote) this.queueSave();
       this.notify(this.meta.pending ? "Op dit apparaat opgeslagen · nog niet online" : "Alle voortgang staat online opgeslagen.");
       if (this.meta.pending) {
         clearTimeout(this.timer);

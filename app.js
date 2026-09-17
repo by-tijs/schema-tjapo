@@ -171,9 +171,15 @@ const sessions = [
     ],
   },
 ].filter((session) => !USER_PROFILE?.upperOnly || session.group !== "Lower")
-  .map((session) => USER_PROFILE?.upperOnly && session.id === "overig"
-    ? { ...session, exercises: session.exercises.filter((exercise) => exercise.id !== "deadlift") }
-    : session);
+  .map((session) => {
+    if (!USER_PROFILE?.upperOnly) return session;
+    if (session.group === "Upper") {
+      return { ...session, exercises: [compound("bench-press", "Bench Press", 2), ...session.exercises] };
+    }
+    return session.id === "overig"
+      ? { ...session, exercises: session.exercises.filter((exercise) => exercise.id !== "deadlift") }
+      : session;
+  });
 
 const cycleOrder = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-c", "lower-c", "upper-d", "lower-d"]
   .filter((id) => sessions.some((session) => session.id === id));
@@ -271,7 +277,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "197";
+const APP_VERSION = "198";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -658,14 +664,20 @@ function ensureDefaults() {
   });
   if (!state.exerciseNames || Array.isArray(state.exerciseNames) || typeof state.exerciseNames !== "object") state.exerciseNames = {};
   if (!Number.isFinite(parseNumber(state.bodyweight)) || parseNumber(state.bodyweight) <= 0) state.bodyweight = USER_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG);
-  const migrated = migrateWeightedDipsBodyweight();
+  const latestBodyweight = getBodyweightRecords()[0];
+  if (latestBodyweight && state.bodyweight !== latestBodyweight.value) {
+    state.bodyweight = latestBodyweight.value;
+    changed = true;
+  }
+  const migratedDips = migrateWeightedDipsBodyweight();
+  const migratedBodyweights = syncRecordedBodyweights();
   if (state.editingHistoryId && !state.history.some((entry) => entry.id === state.editingHistoryId)) state.editingHistoryId = null;
   if (!CHART_GROUPS.includes(state.chartGroup)) state.chartGroup = "Upper";
   if (!getChartFilters(state.chartGroup).some((filter) => filter.value === state.chartFilter)) state.chartFilter = "all";
   if (!state.chartMetric) state.chartMetric = getDefaultChartMetric(state.chartGroup);
   state.statsRangeDays = getStatsRangeDays(state.statsRangeDays);
   syncViewFromHash();
-  return changed || migrated;
+  return changed || migratedDips || migratedBodyweights;
 }
 
 function activateTodayAfterDayChange() {
@@ -693,8 +705,11 @@ function migrateWeightedDipsBodyweight() {
       changed = true;
     }
     if (!Number.isFinite(parseNumber(entry.bodyweight)) || parseNumber(entry.bodyweight) <= 0) {
-      entry.bodyweight = getDefaultBodyweight(workout?.date || state.activeDate);
-      changed = true;
+      const weight = getDefaultBodyweight(workout?.date || state.activeDate);
+      if (entry.bodyweight !== weight) {
+        entry.bodyweight = weight;
+        changed = true;
+      }
     }
   };
 
@@ -1729,12 +1744,13 @@ function getRecordedBodyweight(date) {
   return Number.isFinite(weight) && weight > 0 ? { date, value: String(value), weight } : null;
 }
 
-function getBodyweightForDate(date = state.activeDate) {
-  const exact = getRecordedBodyweight(date);
-  if (exact) return exact.weight;
+function getRecordedBodyweightOnOrBefore(date) {
+  return getRecordedBodyweight(date) || getBodyweightRecords().find((record) => record.date <= date) || null;
+}
 
-  const previous = getBodyweightRecords().find((record) => record.date <= date);
-  if (previous) return previous.weight;
+function getBodyweightForDate(date = state.activeDate) {
+  const recorded = getRecordedBodyweightOnOrBefore(date);
+  if (recorded) return recorded.weight;
 
   const fallback = parseNumber(state.bodyweight);
   return Number.isFinite(fallback) && fallback > 0 ? fallback : DEFAULT_BODYWEIGHT_KG;
@@ -1751,13 +1767,15 @@ function setDailyBodyweight(date, value) {
     const latest = getBodyweightRecords()[0];
     state.bodyweight = latest ? latest.value : (USER_PROFILE ? "" : String(DEFAULT_BODYWEIGHT_KG));
     syncBodyweightForDate(date, getBodyweightForDate(date));
+    syncRecordedBodyweights();
     return true;
   }
 
   if (!Number.isFinite(weight) || weight <= 0) return false;
   state.bodyweights[date] = raw;
-  state.bodyweight = raw;
+  state.bodyweight = getBodyweightRecords()[0].value;
   syncBodyweightForDate(date, weight);
+  syncRecordedBodyweights();
   return true;
 }
 
@@ -1771,6 +1789,7 @@ function syncBodyweightForDate(date, weight) {
     if (historyEntry?.date !== date || !historyEntry.workout) return historyEntry;
     const updated = structuredCloneSafe(historyEntry);
     applyBodyweightToWorkout(updated.workout, value);
+    updated.volume = getWorkoutVolume(updated.workout);
     return updated;
   });
 }
@@ -1783,6 +1802,31 @@ function applyBodyweightToWorkout(workout, value) {
   entries.forEach((entry) => {
     if (entry?.usesBodyweight) entry.bodyweight = String(value);
   });
+}
+
+function syncRecordedBodyweights() {
+  let changed = false;
+  const syncWorkout = (workout) => {
+    const recorded = getRecordedBodyweightOnOrBefore(workout?.date);
+    if (!recorded) return false;
+    let workoutChanged = false;
+    const entries = [...Object.values(workout.exercises || {}), ...(workout.customItems || [])];
+    entries.forEach((entry) => {
+      if (entry?.usesBodyweight && parseNumber(entry.bodyweight) !== recorded.weight) {
+        entry.bodyweight = String(recorded.weight);
+        workoutChanged = true;
+      }
+    });
+    changed ||= workoutChanged;
+    return workoutChanged;
+  };
+  Object.values(state.workouts || {}).forEach(syncWorkout);
+  (state.history || []).forEach((item) => {
+    // Historical summaries must use the same personal weight as their exercises.
+    if (syncWorkout(item.workout)) item.volume = getWorkoutVolume(item.workout);
+  });
+  if (changed) historyCache.ref = null;
+  return changed;
 }
 
 function selectWeightDate(date) {
@@ -3374,11 +3418,12 @@ async function initProfileAccount() {
       stateDirty = false;
       cloudSync.applyingRemote = true;
       state = structuredCloneSafe(candidate);
-      ensureDefaults();
+      const migrated = ensureDefaults();
       flushStateSave();
       cloudSync.applyingRemote = false;
       collapseExerciseCards();
       renderAll();
+      return migrated;
     },
     onStatus: renderProfileAccount,
     clearPasswords: () => {
@@ -3922,7 +3967,7 @@ function normalizeEntry(entry, exercise, date = "") {
   entry.isometric = isometric;
   entry.weightOptional = weightOptional;
   entry.usesBodyweight = usesBodyweight;
-  const recordedBodyweight = date ? getRecordedBodyweight(date) : null;
+  const recordedBodyweight = date ? getRecordedBodyweightOnOrBefore(date) : null;
   entry.bodyweight = usesBodyweight
     ? String(recordedBodyweight?.value || (parseNumber(entry.bodyweight) > 0 ? entry.bodyweight : getDefaultBodyweight(date || state.activeDate)))
     : "";
@@ -4442,22 +4487,14 @@ function normalizeInputValue(target) {
   const field = target.dataset.field;
   if (!DECIMAL_INPUT_FIELDS.has(field)) return value;
 
-  const selectionStart = target.selectionStart;
-  const selectionEnd = target.selectionEnd;
   let normalized = value.replaceAll(",", ".");
   if (ZERO_TO_TEN_INPUT_FIELDS.has(field)) {
-    normalized = clampZeroToTenInput(normalized);
+    const clamped = clampZeroToTenInput(normalized);
+    if (clamped !== normalized) target.value = clamped;
+    normalized = clamped;
   }
-  if (target.value !== normalized) target.value = normalized;
-
-  if (document.activeElement === target && selectionStart !== null && selectionEnd !== null) {
-    try {
-      target.setSelectionRange(selectionStart, selectionEnd);
-    } catch {
-      // Some input modes do not expose a writable selection range.
-    }
-  }
-
+  // Keep the typed comma and cursor intact while editing (especially on mobile).
+  // Only the stored/calculated value uses a dot as its decimal separator.
   return normalized;
 }
 

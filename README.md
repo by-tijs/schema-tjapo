@@ -27,7 +27,7 @@ Voer de regressietests uit met `node --test tests/history.test.cjs`. De tests ge
 
 ## Account Jochem
 
-`index.html?profiel=jochem` opent het upper-profiel met gebruikersnaam `jochem`. Lower ontbreekt in trainingen, cyclus en statistieken; Overig bevat geen deadlift. Jochem kiest via zijn eenmalige activatielink zelf een wachtwoord (minimaal 12 tekens). De naam boven de trainingstitel is verwijderd.
+`index.html?profiel=jochem` opent het upper-profiel met gebruikersnaam `jochem`. Elke Upper begint met twee sets Bench Press. Lower ontbreekt in trainingen, cyclus en statistieken; Overig bevat geen deadlift. Jochem kiest via zijn eenmalige activatielink zelf een wachtwoord (minimaal 12 tekens). De naam boven de trainingstitel is verwijderd.
 
 Firebase Authentication gebruikt intern een gereserveerd loginadres; er wordt geen e-mail verstuurd. Het account heeft een vaste UID en een aparte Firebase-app/authsessie. Firestore laat uitsluitend de eigenaar en Jochem hun eigen `schemaTjapo`-documenten lezen en schrijven. De profielnaam in de URL geeft op zichzelf geen toegang. Zonder persoonlijk e-mailadres verloopt accountherstel via de beheerder.
 
@@ -37,4 +37,8 @@ Cloudschrijfacties gebruiken een transactie en revisienummer. Als een ander appa
 
 Activatiesleutels en wachtwoorden horen nooit in deze repository. Een activatielink bevat het tijdelijke wachtwoord alleen in het URL-fragment. De app verwijdert dit uit de adresbalk en vervangt het tijdelijke wachtwoord bij activatie door het zelfgekozen wachtwoord. Een gebruikte link werkt daarna niet meer.
 
-Verificatie: `node --test tests/*.test.mjs`.
+Lichaamsgewicht bij dips en pull-ups volgt de laatste eigen dagmeting op of vóór de trainingsdatum. Opgeslagen oude gewichten worden daarmee gecorrigeerd; latere metingen veranderen eerdere trainingsdagen niet. Een komma blijft tijdens het invoeren van decimalen staan; opslag en berekeningen gebruiken een punt.
+
+Geluiden staan standaard uit voor beide accounts. De instelling onderaan Stats wordt per account opgeslagen. Uitgeschakeld geluid laadt of activeert geen audio en sluit een al geopende audioverbinding.
+
+Verificatie: `node --test tests/*.test.mjs tests/history.test.cjs`.

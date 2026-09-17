@@ -62,3 +62,54 @@ test('The installed Jochem app opens the same local profile', () => {
   assert.equal(new URL(manifest.start_url,'https://example.com/').searchParams.get('profiel'), 'jochem');
   assert.equal(manifest.name, 'Schema Jochem');
 });
+
+test('Every Jochem Upper starts with two blank Bench Press sets, without changing Tijs', () => {
+  const j = app('?profiel=jochem');
+  for (const id of ['upper-a', 'upper-b', 'upper-c', 'upper-d']) {
+    assert.equal(j.run(`findSession('${id}').exercises[0].name`), 'Bench Press');
+    assert.equal(j.run(`getWorkout('${id}','2026-09-17').exercises['bench-press'].sets.length`), 2);
+    assert.equal(j.run(`getWorkout('${id}','2026-09-17').exercises['bench-press'].sets.every(s => !s.weight && !s.reps && !s.rpe)`), true);
+  }
+  assert.equal(app().run('sessions.some(s => s.exercises.some(e => e.id === "bench-press"))'), false);
+});
+
+test('Adding Bench Press to an existing Upper keeps every previously entered set', () => {
+  const j = app('?profiel=jochem');
+  j.run(`const oldWorkout = getWorkout('upper-b','2026-09-16');
+    delete oldWorkout.exercises['bench-press'];
+    oldWorkout.exercises['weighted-dips'].sets[0] = {weight:'10',reps:'6',rpe:'9.1'};
+    getWorkout('upper-b','2026-09-16');`);
+  assert.equal(j.run('oldWorkout.exercises["bench-press"].sets.length'), 2);
+  assert.equal(j.run('oldWorkout.exercises["weighted-dips"].sets[0].rpe'), '9.1');
+});
+
+test('The last recorded personal weight replaces stale 94kg in later workouts and history', () => {
+  const j = app('?profiel=jochem');
+  j.run(`state.bodyweight = '94';
+    const w = getWorkout('upper-b', '2026-09-17');
+    w.exercises['weighted-dips'].bodyweight = '94';
+    w.exercises['weighted-dips'].sets[0] = {weight:'10',reps:'6',rpe:'9'};
+    state.history = [{id:'saved',date:w.date,sessionId:w.sessionId,workout:structuredClone(w)}];
+    state.bodyweights = {'2026-09-16':'78.5'};
+    ensureDefaults();`);
+  assert.equal(j.run('state.bodyweight'), '78.5');
+  assert.equal(j.run('getWorkout("upper-b","2026-09-17").exercises["weighted-dips"].bodyweight'), '78.5');
+  assert.equal(j.run('state.history[0].workout.exercises["weighted-dips"].bodyweight'), '78.5');
+  assert.equal(j.run('state.history[0].volume'), (78.5 + 10) * 6);
+  assert.equal(j.run('getWorkout("upper-a","2026-09-17").exercises["weighted-pull-ups"].bodyweight'), '78.5');
+  j.run('setDailyBodyweight("2026-09-18","79")');
+  assert.equal(j.run('getWorkout("upper-b","2026-09-17").exercises["weighted-dips"].bodyweight'), '78.5');
+  assert.equal(j.run('getWorkout("upper-b","2026-09-18").exercises["weighted-dips"].bodyweight'), '79');
+});
+
+test('Decimal entry preserves the typed comma while saving a decimal distance and correct pace', () => {
+  const j = app('?profiel=jochem');
+  for (const value of ['5', '5,', '5,2', '5,25', '0,75', '5.25']) {
+    j.run(`var input = { value: ${JSON.stringify(value)}, dataset: {field:'distance'} };`);
+    assert.equal(j.run('normalizeInputValue(input)'), value.replace(',', '.'));
+    assert.equal(j.run('input.value'), value);
+  }
+  assert.equal(j.run('calculateRunPace({distance:"5.25",duration:"26:15"})'), '5:00');
+  assert.equal(j.run('calculateRunPace({distance:"5,25",duration:"26:15"})'), '5:00');
+  assert.equal(j.run('normalizeInputValue({value:"12",dataset:{field:"rpe"}})'), '10');
+});

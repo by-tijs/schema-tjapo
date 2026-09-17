@@ -7,6 +7,7 @@ const vm = require('node:vm');
 // Exercise the actual app without initialization, network access or real storage.
 function loadApp() {
   const context = vm.createContext({
+    URLSearchParams, location: { search: '' }, window: {},
     document: { addEventListener() {} },
     localStorage: { getItem() { return null; } },
     structuredClone,
@@ -250,9 +251,11 @@ test('metric activities also use their last partial session without backfilling 
 
 test('app, HTML, service worker and manifest consistently use the new cache version', () => {
   const root = path.join(__dirname, '..');
-  for (const file of ['app.js', 'index.html', 'sw.js', 'manifest.webmanifest']) {
+  const version = fs.readFileSync(path.join(root, 'app.js'), 'utf8').match(/APP_VERSION = "(\d+)"/)[1];
+  for (const file of ['index.html', 'sw.js', 'manifest.webmanifest', 'manifest-jochem.webmanifest']) {
     const content = fs.readFileSync(path.join(root, file), 'utf8');
-    assert.doesNotMatch(content, /(?:v=|cache-v|APP_VERSION = ")189/);
-    assert.match(content, /190/);
+    const versions = [...content.matchAll(/(?:v=|cache-v)(\d+)/g)].map(match => match[1]);
+    assert.ok(versions.length > 0);
+    assert.ok(versions.every(value => value === version), `${file} has stale asset versions`);
   }
 });

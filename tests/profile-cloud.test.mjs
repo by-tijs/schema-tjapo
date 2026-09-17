@@ -51,6 +51,21 @@ test('The wrong account cannot load or upload this profile',async()=>{
  assert.equal(a.signedOut,true);assert.equal(a.account.authenticated,false);
  assert.equal(a.reads,0);assert.equal(a.writes,0);
 });
+
+test('Migrated cloud data is saved against the revision that was actually loaded',async()=>{
+ const a=fixture({remote:{revision:7,state:{history:[{id:'kept'}],bodyweight:'94'}}});
+ const load=a.account.onLoad;
+ a.account.onLoad=s=>{load(s);if(a.state.history?.length && a.state.bodyweight==='94'){a.state.bodyweight='78.5';return true;}return false;};
+ await a.account.onSession({uid});
+ assert.equal(a.account.meta.revision,7);
+ assert.equal(a.account.meta.pending,true);
+ await a.account.sync();
+ assert.equal(a.remote.revision,8);
+ assert.equal(a.remote.state.bodyweight,'78.5');
+ assert.equal(a.remote.state.history[0].id,'kept');
+ assert.equal(a.account.conflict,null);
+ assert.equal(a.account.meta.pending,false);
+});
 test('New edits during an upload are sent in a later revision',async()=>{
  const a=fixture();await a.account.onSession({uid});await a.account.sync();
  let release; const paused=new Promise(r=>release=r);const tx=a.account.dbApi.runTransaction;
