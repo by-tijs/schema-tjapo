@@ -27,6 +27,10 @@ Voer de regressietests uit met `node --test tests/history.test.cjs`. De tests ge
 
 ## Account Jochem
 
+De vaste installatiepagina voor Jochem is `jochem.html`. Deze levert vanaf het eerste HTML-document Jochems titel en manifest; de iPhone-installatie hangt daardoor niet af van een latere JavaScript-wijziging van het manifest. Oude links met `profiel=jochem` worden hierheen doorgestuurd. Het bestaande manifest-id, Firebase-account en de lokale opslagsleutels blijven gelijk. De serviceworker bewaart voor beide profielen de juiste offline startpagina apart.
+
+Na een wijziging in `index.html`: voer `node scripts/generate-jochem-page.mjs` uit en commit ook `jochem.html`. De tests controleren dat de pagina's gelijk blijven behalve de installatiegegevens.
+
 `index.html?profiel=jochem` opent het upper-profiel met gebruikersnaam `jochem`. Elke Upper begint met twee sets Bench Press. Lower ontbreekt in trainingen, cyclus en statistieken; Overig bevat geen deadlift. Jochem kiest via zijn eenmalige activatielink zelf een wachtwoord (minimaal 12 tekens). De naam boven de trainingstitel is verwijderd.
 
 Firebase Authentication gebruikt intern een gereserveerd loginadres; er wordt geen e-mail verstuurd. Het account heeft een vaste UID en een aparte Firebase-app/authsessie. Firestore laat uitsluitend de eigenaar en Jochem hun eigen `schemaTjapo`-documenten lezen en schrijven. De profielnaam in de URL geeft op zichzelf geen toegang. Zonder persoonlijk e-mailadres verloopt accountherstel via de beheerder.

@@ -3,7 +3,27 @@
   "framework": null,
   "buildCommand": "",
   "outputDirectory": ".",
+  "redirects": [
+    {
+      "source": "/index.html",
+      "has": [{ "type": "query", "key": "profiel", "value": "jochem" }],
+      "destination": "/jochem.html",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "query", "key": "profiel", "value": "jochem" }],
+      "destination": "/jochem.html",
+      "permanent": false
+    }
+  ],
   "headers": [
+    {
+      "source": "/jochem.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
     {
       "source": "/app-version.json",
       "headers": [

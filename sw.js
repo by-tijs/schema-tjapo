@@ -1,27 +1,28 @@
 "use strict";
 
-const CACHE_NAME = "schema-tjapo-cache-v200";
+const CACHE_NAME = "schema-tjapo-cache-v201";
 const CORE_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=200",
-  "./mono-preview.css?v=200",
+  "./jochem.html",
+  "./styles.css?v=201",
+  "./mono-preview.css?v=201",
   "./fonts/kh-teka-regular.woff2",
-  "./firebase-config.js?v=200",
-  "./app.js?v=200",
-  "./profile-cloud.js?v=200",
-  "./app-updates.js?v=200",
-  "./rest-alarm.mp3?v=200",
-  "./side-alarm.mp3?v=200",
-  "./audio-unlock.mp3?v=200",
-  "./manifest.webmanifest?v=200",
-  "./manifest-jochem.webmanifest?v=200",
-  "./favicon.ico?v=200",
-  "./favicon-32.png?v=200",
-  "./apple-touch-icon.png?v=200",
-  "./icon-192.png?v=200",
-  "./icon-512.png?v=200",
-  "./icon-maskable-512.png?v=200",
+  "./firebase-config.js?v=201",
+  "./app.js?v=201",
+  "./profile-cloud.js?v=201",
+  "./app-updates.js?v=201",
+  "./rest-alarm.mp3?v=201",
+  "./side-alarm.mp3?v=201",
+  "./audio-unlock.mp3?v=201",
+  "./manifest.webmanifest?v=201",
+  "./manifest-jochem.webmanifest?v=201",
+  "./favicon.ico?v=201",
+  "./favicon-32.png?v=201",
+  "./apple-touch-icon.png?v=201",
+  "./icon-192.png?v=201",
+  "./icon-512.png?v=201",
+  "./icon-maskable-512.png?v=201",
 ];
 
 self.addEventListener("install", (event) => {
@@ -45,14 +46,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   if (event.request.mode === "navigate" || event.request.destination === "document") {
+    const url = new URL(event.request.url);
+    const cacheKey = url.pathname.endsWith("/jochem.html")
+      || url.searchParams.get("profiel")?.trim().toLowerCase() === "jochem"
+      ? "./jochem.html" : "./index.html";
     event.respondWith(
       fetch(event.request)
         .then((response) => {
           const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", copy));
+          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(cacheKey, copy)).catch(() => {});
           return response;
         })
-        .catch(() => caches.match("./index.html")),
+        .catch(() => caches.match(cacheKey)),
     );
     return;
   }

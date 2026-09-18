@@ -1,7 +1,8 @@
 "use strict";
 
 // A profile selects an account; Firebase authentication and rules grant access.
-const USER_PROFILE = new URLSearchParams(location.search).get("profiel")?.trim().toLowerCase() === "jochem"
+const USER_PROFILE = location.pathname?.endsWith("/jochem.html")
+  || new URLSearchParams(location.search).get("profiel")?.trim().toLowerCase() === "jochem"
   ? Object.freeze({ id: "jochem", name: "Jochem", upperOnly: true,
       uid: "4XLfELa1AoeC4tcqBdW3e4Bz29o1", email: "jochem@schema-tjapo.invalid" })
   : null;
@@ -277,7 +278,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "200";
+const APP_VERSION = "201";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);

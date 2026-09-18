@@ -123,7 +123,7 @@ test('published release metadata and HTML assets match the app version', () => {
   const read = name => readFileSync(new URL('../' + name, import.meta.url), 'utf8');
   const version = read('app.js').match(/const APP_VERSION = "(\d+)"/)[1];
   assert.equal(JSON.parse(read('app-version.json')).version, version);
-  for (const file of ['index.html', 'sw.js', 'manifest.webmanifest', 'manifest-jochem.webmanifest']) {
+  for (const file of ['index.html', 'jochem.html', 'sw.js', 'manifest.webmanifest', 'manifest-jochem.webmanifest']) {
     for (const match of read(file).matchAll(/\?v=(\d+)/g)) assert.equal(match[1], version, file);
   }
   assert.ok(read('sw.js').includes(`app-updates.js?v=${version}`));

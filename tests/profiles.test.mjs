@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const source = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const ownerKey = 'herpakkingsseason.tracker.v1';
-function app(search = '', storage = new Map()) {
+function app(search = '', storage = new Map(), pathname = '/index.html') {
   const context = vm.createContext({
     URLSearchParams, Date, structuredClone, setTimeout, clearTimeout,
-    location: { search, hash: '' }, document: { addEventListener() {} },
+    location: { search, hash: '', pathname }, document: { addEventListener() {} },
     window: { SCHEMA_TJAPO_FIREBASE_CONFIG: {apiKey:'test', projectId:'test', authDomain:'test', appId:'test'} },
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value) },
   });
@@ -59,8 +59,23 @@ test('Bodyweight is personal, and clearing it leaves empty fields without fictit
 });
 test('The installed Jochem app opens the same local profile', () => {
   const manifest = JSON.parse(readFileSync(new URL('../manifest-jochem.webmanifest', import.meta.url)));
-  assert.equal(new URL(manifest.start_url,'https://example.com/').searchParams.get('profiel'), 'jochem');
+  const url = new URL(manifest.start_url,'https://example.com/');
+  const installed = app(url.search, new Map(), url.pathname);
+  assert.equal(installed.run('USER_PROFILE.id'), 'jochem');
+  assert.equal(installed.run('STORAGE_KEY'), app('?profiel=jochem').run('STORAGE_KEY'));
+  assert.equal(installed.run('sessions.filter(s => s.group === "Lower").length'), 0);
+  assert.equal(installed.run('sessions[0].exercises[0].name'), 'Bench Press');
+  assert.equal(manifest.id, './index.html?profiel=jochem');
   assert.equal(manifest.name, 'Schema Jochem');
+});
+
+test('Jochem home-screen URL retains existing account input without a profile query', () => {
+  const storage = new Map();
+  const oldPage = app('?profiel=jochem', storage);
+  oldPage.run('getActiveWorkout().exercises["weighted-pull-ups"].sets[0].reps = "8"; flushStateSave();');
+  const installed = app('', storage, '/jochem.html');
+  assert.equal(installed.run('getActiveWorkout().exercises["weighted-pull-ups"].sets[0].reps'), '8');
+  assert.equal(app('', storage).run('state.history.length'), 0);
 });
 
 test('Every Jochem Upper starts with two blank Bench Press sets, without changing Tijs', () => {

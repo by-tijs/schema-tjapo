@@ -27,6 +27,11 @@ const server = createServer(async (request, response) => {
   try {
     const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
     const pathname = decodeURIComponent(url.pathname);
+    if (["/", "/index.html"].includes(pathname) && url.searchParams.get("profiel") === "jochem") {
+      response.writeHead(307, { Location: `/jochem.html${url.search}`, "Cache-Control": "no-store" });
+      response.end();
+      return;
+    }
     const requested = pathname === "/" ? "index.html" : normalize(pathname).replace(/^[/\\]/, "");
     const filePath = resolve(join(root, requested));
 
