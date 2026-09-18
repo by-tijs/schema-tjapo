@@ -42,3 +42,5 @@ Lichaamsgewicht bij dips en pull-ups volgt de laatste eigen dagmeting op of vó�
 Geluiden staan standaard uit voor beide accounts. De instelling onderaan Stats wordt per account opgeslagen. Uitgeschakeld geluid laadt of activeert geen audio en sluit een al geopende audioverbinding.
 
 Verificatie: `node --test tests/*.test.mjs tests/history.test.cjs`.
+
+De app controleert bij openen, terugkomst en tijdens gebruik op een nieuwe versie. Een beschikbare update verschijnt bovenaan; onderaan Stats staat altijd App bijwerken met het profiel en de huidige versie. Bijwerken bewaart eerst de lokale voortgang en de markering voor cloudsynchronisatie, en herlaadt daarna dezelfde profiellink. Er wordt niet automatisch herladen tijdens een training en er wordt geen account- of trainingsopslag gewist. Een al geopende versie van vóór deze update heeft eenmalig een volledige herstart of herlaadactie nodig.

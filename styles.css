@@ -1544,6 +1544,27 @@ h1 {
   margin: 6px 0 0;
 }
 
+.app-update-banner,
+.app-update-settings {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.app-update-settings {
+  border-top: 1px solid var(--line);
+  border-bottom: 0;
+}
+
+.app-update-banner .mini-button,
+.app-update-settings .mini-button {
+  min-height: 44px;
+}
+
 .sound-toggle {
   display: inline-flex;
   flex-shrink: 0;
