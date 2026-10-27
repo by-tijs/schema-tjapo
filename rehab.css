@@ -1,0 +1,44 @@
+/* Rehab uses the same navigation, day rail, exercise cards and input styles. */
+.rehab-week-field {
+  min-width: 104px;
+  flex-shrink: 0;
+}
+
+.rehab-exercise .exercise-head {
+  grid-template-columns: auto minmax(0, 1fr);
+  cursor: default;
+}
+
+.rehab-exercise .exercise-subtitle {
+  line-height: 1.4;
+}
+
+.rehab-exercise .exercise-note {
+  padding-inline: 0;
+}
+
+.rehab-copy-bar {
+  display: grid;
+  gap: 12px;
+}
+
+.rehab-preview {
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.rehab-preview summary {
+  padding-block: 10px;
+  cursor: pointer;
+}
+
+.rehab-preview textarea {
+  margin-top: 8px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.rehab-copy-status:empty {
+  display: none;
+}

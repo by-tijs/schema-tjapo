@@ -298,7 +298,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "203";
+const APP_VERSION = "204";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -476,6 +476,7 @@ function init() {
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   bindElements();
   configureLocalProfile();
+  window.Rehab?.mount({ enabled: !USER_PROFILE, getState: () => state, save: saveState, flush: flushStateSave, refreshIcons });
   installListeners();
   const migrated = ensureDefaults();
   if (migrated) flushStateSave();
@@ -632,6 +633,7 @@ function installListeners() {
     resizeTimer = setTimeout(() => {
       if (els.datePicker && !els.datePicker.hidden) positionDatePicker();
       if (getActiveViewName() === "stats") renderStats();
+      if (getActiveViewName() === "rehab" && !USER_PROFILE) window.Rehab?.resizeNotes();
       updateSlidingIndicators();
     }, 120);
   });
@@ -838,6 +840,7 @@ function renderAll() {
   if (view === "log") renderHistory();
   if (view === "stats") renderStats();
   if (view === "weight") renderWeightView();
+  if (view === "rehab" && !USER_PROFILE) window.Rehab?.render();
   renderStorage();
   renderRestTimer();
   refreshIcons();
@@ -3759,6 +3762,7 @@ function compareIsoDates(a, b) {
 }
 
 function stateHasMeaningfulData(candidate) {
+  if (window.Rehab?.hasNotes(candidate)) return true;
   if (Array.isArray(candidate?.history) && candidate.history.length > 0) return true;
   if (Array.isArray(candidate?.cycleCompleted) && candidate.cycleCompleted.length > 0) return true;
   if (Object.keys(candidate?.bodyweights || {}).length > 0) return true;
@@ -6154,6 +6158,7 @@ function syncViewFromHash() {
     if (view === "stats" && els.chartCanvas) renderStats();
     if (view === "log" && els.historyList) renderHistory();
     if (view === "weight" && els.weightHistory) renderWeightView();
+    if (view === "rehab" && !USER_PROFILE) window.Rehab?.render();
     requestAnimationFrame(() => updateSlidingIndicators());
   };
 

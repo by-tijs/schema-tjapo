@@ -8,18 +8,21 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Schema Jochem">
   <title>Schema Jochem</title>
-  <link rel="manifest" href="manifest-jochem.webmanifest?v=203">
-  <link rel="icon" href="favicon.ico?v=203" type="image/x-icon" sizes="any">
-  <link rel="icon" href="favicon-32.png?v=203" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=203" sizes="180x180">
+  <link rel="manifest" href="manifest-jochem.webmanifest?v=204">
+  <link rel="icon" href="favicon.ico?v=204" type="image/x-icon" sizes="any">
+  <link rel="icon" href="favicon-32.png?v=204" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=204" sizes="180x180">
   <link rel="preload" href="fonts/kh-teka-regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=203">
-  <link rel="stylesheet" href="mono-preview.css?v=203">
+  <link rel="stylesheet" href="styles.css?v=204">
+  <link rel="stylesheet" href="mono-preview.css?v=204">
+  <link rel="stylesheet" href="rehab.css?v=204">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=203" defer></script>
-  <script src="profile-cloud.js?v=203" defer></script>
-  <script src="app-updates.js?v=203" defer></script>
-  <script src="app.js?v=203" defer></script>
+  <script src="firebase-config.js?v=204" defer></script>
+  <script src="profile-cloud.js?v=204" defer></script>
+  <script src="app-updates.js?v=204" defer></script>
+  <script src="rehab-plan.js?v=204" defer></script>
+  <script src="rehab.js?v=204" defer></script>
+  <script src="app.js?v=204" defer></script>
 </head>
 <body>
   <section id="profile-access" class="profile-access" aria-labelledby="profile-access-title" hidden>
@@ -58,6 +61,10 @@
       <a href="#stats" data-view-link="stats">
         <i data-lucide="chart-no-axes-combined"></i>
         <span>Stats</span>
+      </a>
+      <a href="#rehab" data-view-link="rehab" data-rehab-owner hidden>
+        <i data-lucide="activity"></i>
+        <span>Rehab</span>
       </a>
     </nav>
 
@@ -105,6 +112,8 @@
           </section>
         </div>
       </section>
+
+      <section class="view" data-view="rehab" data-rehab-owner aria-labelledby="rehab-title" hidden></section>
 
       <section class="view" data-view="log" aria-label="Training log">
         <div id="history-list" class="history-list"></div>
@@ -296,8 +305,8 @@
     </button>
   </div>
 
-  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=203" preload="none" muted loop playsinline aria-hidden="true"></audio>
-  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=203" preload="none" muted playsinline aria-hidden="true"></audio>
+  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=204" preload="none" muted loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=204" preload="none" muted playsinline aria-hidden="true"></audio>
 
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>

@@ -986,7 +986,7 @@ select {
   .view-tabs {
     top: 0;
     width: 100%;
-    grid-template-columns: repeat(4, max-content);
+    grid-template-columns: repeat(var(--view-count, 4), max-content);
     justify-content: center;
     gap: clamp(26px, 4vw, 52px);
     border-top: 0;
@@ -1103,7 +1103,7 @@ select {
   }
 
   .view-tabs a {
-    flex: 0 0 25%;
+    flex: 0 0 calc(100% / var(--view-count, 4));
     flex-direction: column;
     gap: 0.12em;
   }
