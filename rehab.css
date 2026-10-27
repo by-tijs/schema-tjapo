@@ -4,11 +4,6 @@
   flex-shrink: 0;
 }
 
-.rehab-exercise .exercise-head {
-  grid-template-columns: auto minmax(0, 1fr);
-  cursor: default;
-}
-
 .rehab-exercise .exercise-subtitle {
   line-height: 1.4;
 }
@@ -20,6 +15,17 @@
 .rehab-copy-bar {
   display: grid;
   gap: 12px;
+}
+
+.rehab-days .session-chip.is-cycle-complete {
+  color: #050505;
+}
+
+.rehab-day-actions {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
 }
 
 .rehab-preview {

@@ -138,7 +138,7 @@ function mounted({ clipboardFails = false, state = {}, now = () => new Date('202
   const preview = { open: false };
   const field = { value: '', focus() { this.focused = true; }, select() { this.selected = true; }, setSelectionRange(a, b) { this.range = [a, b]; } };
   const elements = { '.rehab-copy-status': status, '.rehab-preview': preview, '[data-rehab-text]': field, '[data-rehab-week]': { focus() {} } };
-  const root = { innerHTML: '', querySelector: s => elements[s], querySelectorAll: () => [], addEventListener: (name, fn) => { listeners[name] = fn; } };
+  const root = { innerHTML: '', querySelector: s => elements[s] || { focus() {} }, querySelectorAll: () => [], addEventListener: (name, fn) => { listeners[name] = fn; } };
   const nav = { style: { setProperty() {} } };
   const copied = [];
   let flushes = 0;
@@ -163,6 +163,74 @@ test('note entry saves immediately, escapes HTML in the form, and refreshes the 
   assert.ok(!ui.root.innerHTML.includes('<script>'));
   assert.ok(ui.root.innerHTML.includes('&lt;script&gt;'));
   assert.equal(input.style.height, '80px');
+});
+
+test('rehab completion is separate from notes, isolated by day/week, and survives storage', () => {
+  const { api } = load();
+  const state = { history: [{ id: 'strength-history' }] };
+  api.setNote(state, 'week-2', 'day-1', 'ski', 'Opmerking blijft staan');
+  const report = api.weekText(state, 'week-2');
+  assert.equal(api.dayProgress(state, 'week-2', 'day-1').percent, 0);
+  api.setExerciseComplete(state, 'week-2', 'day-1', 'ski', true);
+  assert.equal(api.dayProgress(state, 'week-2', 'day-1').percent, 17);
+  assert.equal(api.dayProgress(state, 'week-2', 'day-1').complete, false);
+  api.setDayComplete(state, 'week-2', 'day-1', true);
+  const reloaded = JSON.parse(JSON.stringify(state));
+  assert.equal(api.dayProgress(reloaded, 'week-2', 'day-1').percent, 100);
+  assert.equal(api.dayProgress(reloaded, 'week-2', 'day-1').complete, true);
+  assert.equal(api.dayProgress(reloaded, 'week-2', 'day-2').percent, 0);
+  assert.equal(api.dayProgress(reloaded, 'week-1', 'day-1').percent, 0);
+  assert.equal(api.weekText(reloaded, 'week-2'), report);
+  assert.deepEqual(state.history, [{ id: 'strength-history' }]);
+  api.setExerciseComplete(reloaded, 'week-2', 'day-1', 'ski', false);
+  assert.equal(api.dayProgress(reloaded, 'week-2', 'day-1').percent, 83);
+  api.setDayComplete(reloaded, 'week-2', 'day-1', false);
+  assert.equal(api.dayProgress(reloaded, 'week-2', 'day-1').percent, 0);
+  assert.equal(api.getNote(reloaded, 'week-2', 'day-1', 'ski'), 'Opmerking blijft staan');
+});
+
+test('a day without notes can be completed; future empty days cannot', () => {
+  const { api } = load();
+  const state = {};
+  assert.equal(api.setDayComplete(state, 'week-3', 'day-1', true), false);
+  assert.equal(api.setExerciseComplete(state, 'week-2', 'day-1', 'missing', true), false);
+  assert.equal(api.dayProgress(state, 'week-3', 'day-1').complete, false);
+  assert.equal(api.hasData(state), false);
+  assert.equal(api.setDayComplete(state, 'week-2', 'day-1', true), true);
+  assert.equal(api.hasNotes(state), false);
+  assert.equal(api.hasData(state), true);
+  assert.equal((api.weekText(state, 'week-2').match(/Geen opmerkingen/g) || []).length, 22);
+  api.setDayComplete(state, 'week-2', 'day-1', false);
+  assert.equal(api.hasData(state), true); // Explicit undo must also sync to other devices.
+});
+
+test('exercise cards use the shared chevron and percentages, and completion controls save immediately', () => {
+  const ui = mounted();
+  const click = (selector, dataset = {}) => ui.listeners.click({
+    stopPropagation() {}, target: { closest: s => s === selector ? { dataset } : null },
+  });
+  ui.api.render();
+  assert.match(ui.root.innerHTML, /class="title-progress" aria-label="0% afgerond">0%/);
+  assert.match(ui.root.innerHTML, /<span class="set-counter">0%<\/span>/);
+  assert.match(ui.root.innerHTML, /data-lucide="chevron-down"/);
+  click('[data-rehab-toggle]', { rehabToggle: 'ski' });
+  assert.match(ui.root.innerHTML, /data-lucide="chevron-up"/);
+  assert.match(ui.root.innerHTML, /id="rehab-week-2-day-1-ski">/);
+  click('[data-rehab-done]', { rehabDone: 'ski' });
+  assert.equal(ui.saves(), 1);
+  assert.equal(ui.flushes(), 1);
+  assert.match(ui.root.innerHTML, /aria-label="17% afgerond">17%/);
+  click('[data-rehab-complete]');
+  assert.equal(ui.saves(), 2);
+  assert.equal(ui.flushes(), 2);
+  assert.match(ui.root.innerHTML, /aria-label="100% afgerond">100%/);
+  assert.match(ui.root.innerHTML, /aria-label="Dag 1, afgerond"/);
+  assert.match(ui.root.innerHTML, /data-rehab-complete disabled/);
+  assert.match(ui.root.innerHTML, /data-rehab-reopen>Dag opnieuw openen/);
+  click('[data-rehab-reopen]');
+  assert.equal(ui.api.dayProgress(ui.state, 'week-2', 'day-1').percent, 0);
+  assert.equal(ui.flushes(), 3);
+  assert.match(ui.root.innerHTML, /data-rehab-reopen hidden/);
 });
 
 for (const clipboardFails of [false, true]) {
@@ -209,6 +277,12 @@ test('rehab-only input is meaningful to existing cloud selection and is included
   const saved = JSON.parse(storage.get('herpakkingsseason.tracker.v1'));
   assert.equal(saved.rehab.weeks['week-1']['day-1'].ski, 'Bewaarde opmerking');
   assert.ok(saved.updatedAt);
+  vm.runInContext('state.rehab = {}; window.Rehab.setDayComplete(state, "week-2", "day-1", true); saveState(); flushStateSave();', context);
+  assert.equal(vm.runInContext('stateHasMeaningfulData(state)', context), true);
+  assert.equal(JSON.parse(storage.get('herpakkingsseason.tracker.v1')).rehab.progress['week-2']['day-1'].ski, true);
+  vm.runInContext('window.Rehab.setDayComplete(state, "week-2", "day-1", false); saveState(); flushStateSave();', context);
+  assert.equal(vm.runInContext('stateHasMeaningfulData(state)', context), true);
+  assert.equal(JSON.parse(storage.get('herpakkingsseason.tracker.v1')).rehab.progress['week-2']['day-1'].ski, false);
 });
 
 test('rehab files are in the offline cache and only owner HTML elements opt into the view', () => {

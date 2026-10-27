@@ -5,6 +5,7 @@ window.Rehab = (() => {
   let options;
   let selectedWeekId;
   let calendarWeekId;
+  const expandedExercises = new Set();
   const weeks = window.REHAB_PLAN;
   const record = (value) => value && typeof value === "object" && !Array.isArray(value);
   const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -34,6 +35,42 @@ window.Rehab = (() => {
     return Object.values(state?.rehab?.weeks || {}).some((week) => record(week)
       && Object.values(week).some((day) => record(day)
         && Object.values(day).some((note) => typeof note === "string" && note.trim())));
+  }
+
+  function isExerciseComplete(state, weekId, dayId, exerciseId) {
+    return state.rehab?.progress?.[weekId]?.[dayId]?.[exerciseId] === true;
+  }
+
+  function dayProgress(state, weekId, dayId) {
+    const day = weeks.find((week) => week.id === weekId)?.days.find((item) => item.id === dayId);
+    const total = day?.exercises.length || 0;
+    const done = day?.exercises.filter((exercise) => isExerciseComplete(state, weekId, dayId, exercise.id)).length || 0;
+    return { percent: total ? Math.round(done / total * 100) : 0, complete: total > 0 && done === total };
+  }
+
+  function setExerciseComplete(state, weekId, dayId, exerciseId, complete) {
+    const day = weeks.find((week) => week.id === weekId)?.days.find((item) => item.id === dayId);
+    if (!day?.exercises.some((exercise) => exercise.id === exerciseId)) return false;
+    const data = getData(state);
+    if (!record(data.progress)) data.progress = {};
+    if (!record(data.progress[weekId])) data.progress[weekId] = {};
+    if (!record(data.progress[weekId][dayId])) data.progress[weekId][dayId] = {};
+    // Keep explicit false values so reopening a day also survives cloud sync.
+    data.progress[weekId][dayId][exerciseId] = Boolean(complete);
+    return true;
+  }
+
+  function setDayComplete(state, weekId, dayId, complete) {
+    const day = weeks.find((week) => week.id === weekId)?.days.find((item) => item.id === dayId);
+    if (!day?.exercises.length) return false;
+    day.exercises.forEach((exercise) => setExerciseComplete(state, weekId, dayId, exercise.id, complete));
+    return true;
+  }
+
+  function hasData(state) {
+    return hasNotes(state) || Object.values(state?.rehab?.progress || {}).some((week) => record(week)
+      && Object.values(week).some((day) => record(day)
+        && Object.values(day).some((complete) => typeof complete === "boolean")));
   }
 
   function weekText(state, weekId) {
@@ -67,6 +104,7 @@ window.Rehab = (() => {
     if (!root) return;
     calendarWeekId = currentWeek(options.now()).id;
     selectedWeekId = calendarWeekId;
+    expandedExercises.clear();
     render();
   }
 
@@ -96,18 +134,22 @@ window.Rehab = (() => {
     if (!root) return;
     const { week, day } = selection();
     const hasExercises = week.days.some((item) => item.exercises.length);
+    const progress = dayProgress(options.getState(), week.id, day.id);
     root.innerHTML = `
       <div class="workbench">
         <aside class="side-panel">
-          <div class="session-rail" aria-label="Rehabdagen">
-            ${week.days.map((item) => `<button type="button" class="session-chip${item.id === day.id ? " is-active" : ""}"
-              data-rehab-day="${item.id}" aria-pressed="${item.id === day.id}"><strong>${item.label}</strong></button>`).join("")}
+          <div class="session-rail rehab-days" aria-label="Rehabdagen">
+            ${week.days.map((item) => {
+              const complete = dayProgress(options.getState(), week.id, item.id).complete;
+              return `<button type="button" class="session-chip${item.id === day.id ? " is-active" : ""}${complete ? " is-cycle-complete" : ""}"
+                data-rehab-day="${item.id}" aria-label="${item.label}${complete ? ", afgerond" : ""}" aria-pressed="${item.id === day.id}"><strong>${item.label}</strong></button>`;
+            }).join("")}
           </div>
         </aside>
         <section class="training-panel">
           <div class="session-heading">
             <div class="session-title-block">
-              <h1 id="rehab-title">${day.label}</h1>
+              <h1 id="rehab-title"><span>${day.label}</span>${day.exercises.length ? `<span class="title-progress${progress.complete ? " is-complete" : ""}" aria-label="${progress.percent}% afgerond">${progress.percent}%</span>` : ""}</h1>
               <span class="session-time-estimate">Rehab · ${weekDates(week)}</span>
             </div>
             <label class="field rehab-week-field"><span>Week</span>
@@ -116,22 +158,42 @@ window.Rehab = (() => {
           </div>
           <div class="exercise-list">
             ${!day.exercises.length ? `<div class="empty-state">Het schema voor ${week.label.toLowerCase()} volgt nog.</div>` : ""}
-            ${day.exercises.map((exercise, index) => `
-              <article class="exercise-card rehab-exercise">
-                <header class="exercise-head">
+            ${day.exercises.map((exercise, index) => {
+              const isOpen = expandedExercises.has(exercise.id);
+              const complete = isExerciseComplete(options.getState(), week.id, day.id, exercise.id);
+              const bodyId = `rehab-${week.id}-${day.id}-${exercise.id}`;
+              return `
+              <article class="exercise-card rehab-exercise${isOpen ? " is-open" : ""}">
+                <header class="exercise-head" data-rehab-toggle="${exercise.id}">
                   <span class="exercise-index">${String(index + 1).padStart(2, "0")}</span>
                   <div class="exercise-title">
-                    <h3>${escape(exercise.name)}</h3>
+                    <button class="activity-name-display" type="button" data-rehab-toggle="${exercise.id}" aria-expanded="${isOpen}" aria-controls="${bodyId}">${escape(exercise.name)}</button>
                     <span class="exercise-subtitle">${escape(exercise.prescription)}</span>
                   </div>
+                  <div class="card-controls">
+                    <button class="card-toggle${complete && !isOpen ? " is-complete" : ""}" type="button" data-rehab-toggle="${exercise.id}" aria-expanded="${isOpen}" aria-controls="${bodyId}" aria-label="${isOpen ? "Klap dicht" : "Klap open"}: ${escape(exercise.name)}, ${complete ? 100 : 0}% afgerond">
+                      <span class="set-counter">${complete ? 100 : 0}%</span>
+                      <i data-lucide="${isOpen ? "chevron-up" : "chevron-down"}"></i>
+                    </button>
+                  </div>
                 </header>
-                <div class="exercise-note">
-                  <textarea rows="1" data-rehab-note="${exercise.id}" aria-label="Opmerking bij ${escape(exercise.name)}" placeholder="Opmerking toevoegen…">${escape(getNote(options.getState(), week.id, day.id, exercise.id))}</textarea>
+                <div id="${bodyId}"${isOpen ? "" : " hidden"}>
+                  <div class="exercise-note">
+                    <textarea rows="1" data-rehab-note="${exercise.id}" aria-label="Opmerking bij ${escape(exercise.name)}" placeholder="Opmerking toevoegen…">${escape(getNote(options.getState(), week.id, day.id, exercise.id))}</textarea>
+                  </div>
+                  <div class="exercise-actions">
+                    <button class="mini-button" type="button" data-rehab-done="${exercise.id}"><i data-lucide="${complete ? "rotate-ccw" : "check"}"></i><span>${complete ? "Oefening heropenen" : "Oefening afronden"}</span></button>
+                  </div>
                 </div>
-              </article>`).join("")}
+              </article>`;
+            }).join("")}
           </div>
           <div class="finish-bar rehab-copy-bar"${hasExercises ? "" : " hidden"}>
-            <button class="primary-button" type="button" data-rehab-copy><i data-lucide="copy"></i><span>Kopieer ${week.label.toLowerCase()}</span></button>
+            <div class="rehab-day-actions"${day.exercises.length ? "" : " hidden"}>
+              <button class="primary-button" type="button" data-rehab-complete${progress.complete ? " disabled" : ""}><i data-lucide="check"></i><span>${progress.complete ? "Dag afgerond" : "Dag afronden"}</span></button>
+              <button class="mini-button" type="button" data-rehab-reopen${progress.complete ? "" : " hidden"}>Dag opnieuw openen</button>
+            </div>
+            <button class="ghost-button" type="button" data-rehab-copy><i data-lucide="copy"></i><span>Kopieer ${week.label.toLowerCase()}</span></button>
             <span class="record-meta">Met schema en opmerkingen. Klaar voor WhatsApp.</span>
             <details class="rehab-preview">
               <summary>Weektekst bekijken</summary>
@@ -168,6 +230,7 @@ window.Rehab = (() => {
     root = null;
     selectedWeekId = null;
     calendarWeekId = null;
+    expandedExercises.clear();
     if (!settings.enabled) {
       document.querySelectorAll("[data-rehab-owner]").forEach((element) => element.remove());
       return;
@@ -184,15 +247,50 @@ window.Rehab = (() => {
       const dayButton = event.target.closest("[data-rehab-day]");
       if (dayButton) {
         getData(options.getState()).selectedDay = dayButton.dataset.rehabDay;
+        expandedExercises.clear();
         options.save();
         render();
         root.querySelector(`[data-rehab-day="${selection().day.id}"]`).focus({ preventScroll: true });
+      }
+      const toggle = event.target.closest("[data-rehab-toggle]");
+      if (toggle) {
+        const id = toggle.dataset.rehabToggle;
+        if (expandedExercises.has(id)) expandedExercises.delete(id);
+        else expandedExercises.add(id);
+        render();
+        root.querySelector(`button[data-rehab-toggle="${id}"]`).focus({ preventScroll: true });
+      }
+      const doneButton = event.target.closest("[data-rehab-done]");
+      if (doneButton) {
+        const { week, day } = selection();
+        const id = doneButton.dataset.rehabDone;
+        const complete = !isExerciseComplete(options.getState(), week.id, day.id, id);
+        if (setExerciseComplete(options.getState(), week.id, day.id, id, complete)) {
+          options.save();
+          options.flush();
+          render();
+          root.querySelector(`[data-rehab-done="${id}"]`).focus({ preventScroll: true });
+        }
+      }
+      const finish = event.target.closest("[data-rehab-complete]");
+      const reopen = event.target.closest("[data-rehab-reopen]");
+      if (finish || reopen) {
+        const { week, day } = selection();
+        if (setDayComplete(options.getState(), week.id, day.id, Boolean(finish))) {
+          options.save();
+          options.flush();
+          expandedExercises.clear();
+          render();
+          root.querySelector(finish ? "[data-rehab-reopen]" : "[data-rehab-complete]").focus({ preventScroll: true });
+          options.notify?.(`${day.label} ${finish ? "afgerond" : "weer geopend"}`);
+        }
       }
       if (event.target.closest("[data-rehab-copy]")) void copyWeek();
     });
     root.addEventListener("change", (event) => {
       if (!event.target.matches("[data-rehab-week]")) return;
       selectedWeekId = event.target.value;
+      expandedExercises.clear();
       render();
       root.querySelector("[data-rehab-week]").focus({ preventScroll: true });
     });
@@ -207,5 +305,6 @@ window.Rehab = (() => {
     });
   }
 
-  return { mount, open, resume, render, resizeNotes, getNote, setNote, hasNotes, weekText, currentWeek };
+  return { mount, open, resume, render, resizeNotes, getNote, setNote, hasNotes, hasData, weekText, currentWeek,
+    isExerciseComplete, dayProgress, setExerciseComplete, setDayComplete };
 })();
