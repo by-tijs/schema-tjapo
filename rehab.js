@@ -3,6 +3,8 @@
 window.Rehab = (() => {
   let root;
   let options;
+  let selectedWeekId;
+  let calendarWeekId;
   const weeks = window.REHAB_PLAN;
   const record = (value) => value && typeof value === "object" && !Array.isArray(value);
   const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -37,15 +39,46 @@ window.Rehab = (() => {
   function weekText(state, weekId) {
     const week = weeks.find((item) => item.id === weekId);
     if (!week) return "";
+    if (!week.days.some((day) => day.exercises.length)) return `Rehab Tijs — ${week.label}\n\nSchema volgt nog.`;
     return [`Rehab Tijs — ${week.label}`, ...week.days.map((day) => [
       day.label,
-      ...day.exercises.map((exercise) => `${exercise.name}\n${getNote(state, week.id, day.id, exercise.id).trim() || "Geen opmerkingen"}`),
+      ...day.exercises.map((exercise) => `*${exercise.name}* — ${exercise.prescription}\n${getNote(state, week.id, day.id, exercise.id).trim() || "Geen opmerkingen"}`),
     ].join("\n\n"))].join("\n\n");
+  }
+
+  function currentWeek(date = new Date()) {
+    // Compare calendar dates in the schedule's timezone, including DST changes.
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Europe/Amsterdam", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(date).map((part) => [part.type, part.value]));
+    const dateKey = `${parts.year}-${parts.month}-${parts.day}`;
+    return weeks.filter((week) => week.startDate <= dateKey).at(-1) || weeks[0];
+  }
+
+  function weekDates(week) {
+    const start = new Date(`${week.startDate}T12:00:00Z`);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 6);
+    const format = new Intl.DateTimeFormat("nl-NL", { timeZone: "UTC", day: "numeric", month: "short" });
+    return `${format.format(start)} – ${format.format(end)}`;
+  }
+
+  function open() {
+    if (!root) return;
+    calendarWeekId = currentWeek(options.now()).id;
+    selectedWeekId = calendarWeekId;
+    render();
+  }
+
+  function resume() {
+    // Keep a manually selected week during this visit, but advance after a new
+    // calendar week starts while the installed app was in the background.
+    if (root && calendarWeekId !== currentWeek(options.now()).id) open();
   }
 
   function selection() {
     const data = options.getState().rehab;
-    const week = weeks.find((item) => item.id === data?.selectedWeek) || weeks[0];
+    const week = weeks.find((item) => item.id === selectedWeekId) || currentWeek(options.now());
     const day = week.days.find((item) => item.id === data?.selectedDay) || week.days[0];
     return { week, day };
   }
@@ -62,6 +95,7 @@ window.Rehab = (() => {
   function render() {
     if (!root) return;
     const { week, day } = selection();
+    const hasExercises = week.days.some((item) => item.exercises.length);
     root.innerHTML = `
       <div class="workbench">
         <aside class="side-panel">
@@ -74,13 +108,14 @@ window.Rehab = (() => {
           <div class="session-heading">
             <div class="session-title-block">
               <h1 id="rehab-title">${day.label}</h1>
-              <span class="session-time-estimate">Rehab · ${week.label}</span>
+              <span class="session-time-estimate">Rehab · ${weekDates(week)}</span>
             </div>
             <label class="field rehab-week-field"><span>Week</span>
               <select data-rehab-week aria-label="Rehabweek">${weeks.map((item) => `<option value="${item.id}"${item.id === week.id ? " selected" : ""}>${item.label}</option>`).join("")}</select>
             </label>
           </div>
           <div class="exercise-list">
+            ${!day.exercises.length ? `<div class="empty-state">Het schema voor ${week.label.toLowerCase()} volgt nog.</div>` : ""}
             ${day.exercises.map((exercise, index) => `
               <article class="exercise-card rehab-exercise">
                 <header class="exercise-head">
@@ -95,9 +130,9 @@ window.Rehab = (() => {
                 </div>
               </article>`).join("")}
           </div>
-          <div class="finish-bar rehab-copy-bar">
+          <div class="finish-bar rehab-copy-bar"${hasExercises ? "" : " hidden"}>
             <button class="primary-button" type="button" data-rehab-copy><i data-lucide="copy"></i><span>Kopieer ${week.label.toLowerCase()}</span></button>
-            <span class="record-meta">Alle vier dagen, met jouw opmerkingen.</span>
+            <span class="record-meta">Met schema en opmerkingen. Klaar voor WhatsApp.</span>
             <details class="rehab-preview">
               <summary>Weektekst bekijken</summary>
               <textarea rows="12" readonly aria-label="Tekst om te kopiëren" data-rehab-text>${escape(weekText(options.getState(), week.id))}</textarea>
@@ -131,11 +166,15 @@ window.Rehab = (() => {
 
   function mount(settings) {
     root = null;
+    selectedWeekId = null;
+    calendarWeekId = null;
     if (!settings.enabled) {
       document.querySelectorAll("[data-rehab-owner]").forEach((element) => element.remove());
       return;
     }
-    options = settings;
+    options = { now: () => new Date(), ...settings };
+    selectedWeekId = currentWeek(options.now()).id;
+    calendarWeekId = selectedWeekId;
     root = document.querySelector('[data-view="rehab"]');
     document.querySelectorAll("[data-rehab-owner]").forEach((element) => { element.hidden = false; });
     document.querySelector(".view-tabs").style.setProperty("--view-count", "5");
@@ -153,8 +192,7 @@ window.Rehab = (() => {
     });
     root.addEventListener("change", (event) => {
       if (!event.target.matches("[data-rehab-week]")) return;
-      getData(options.getState()).selectedWeek = event.target.value;
-      options.save();
+      selectedWeekId = event.target.value;
       render();
       root.querySelector("[data-rehab-week]").focus({ preventScroll: true });
     });
@@ -169,5 +207,5 @@ window.Rehab = (() => {
     });
   }
 
-  return { mount, render, resizeNotes, getNote, setNote, hasNotes, weekText };
+  return { mount, open, resume, render, resizeNotes, getNote, setNote, hasNotes, weekText, currentWeek };
 })();

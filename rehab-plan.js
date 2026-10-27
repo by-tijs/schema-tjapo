@@ -35,13 +35,17 @@ window.REHAB_PLAN = (() => {
       ["mb-slam", "MB slam", "2 x 5 max 3kg", "2 x 7 max 3kg"],
     ],
   ];
-  return [1, 2].map((week) => ({
+  // Week 2 started on Monday 26 October 2026. Later prescriptions come from Max;
+  // future weeks intentionally contain no exercises until supplied.
+  const startDates = ["2026-10-19", "2026-10-26", "2026-11-02", "2026-11-09", "2026-11-16"];
+  return [1, 2, 3, 4, 5].map((week) => ({
     id: `week-${week}`,
     label: `Week ${week}`,
+    startDate: startDates[week - 1],
     days: days.map((exercises, index) => ({
       id: `day-${index + 1}`,
       label: `Dag ${index + 1}`,
-      exercises: exercises.map(([id, name, first, second]) => ({ id, name, prescription: week === 1 ? first : second })),
+      exercises: week > 2 ? [] : exercises.map(([id, name, first, second]) => ({ id, name, prescription: week === 1 ? first : second })),
     })),
   }));
 })();

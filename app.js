@@ -298,7 +298,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "204";
+const APP_VERSION = "205";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -622,11 +622,13 @@ function installListeners() {
     } else {
       activateTodayAfterDayChange();
       recoverRestTimerAudio();
+      if (getActiveViewName() === "rehab" && !USER_PROFILE) window.Rehab?.resume();
     }
   });
   window.addEventListener("pageshow", () => {
     activateTodayAfterDayChange();
     recoverRestTimerAudio();
+    if (getActiveViewName() === "rehab" && !USER_PROFILE) window.Rehab?.resume();
   });
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
@@ -6142,6 +6144,7 @@ function syncViewFromHash() {
   const view = availableViews.includes(requestedView) ? requestedView : "train";
   const previousView = getActiveViewName();
   const changedView = hasSyncedView && previousView !== view;
+  const openingRehab = view === "rehab" && (!hasSyncedView || previousView !== "rehab");
   if (view !== requestedView) {
     history.replaceState(null, "", "#train");
   }
@@ -6158,7 +6161,10 @@ function syncViewFromHash() {
     if (view === "stats" && els.chartCanvas) renderStats();
     if (view === "log" && els.historyList) renderHistory();
     if (view === "weight" && els.weightHistory) renderWeightView();
-    if (view === "rehab" && !USER_PROFILE) window.Rehab?.render();
+    if (view === "rehab" && !USER_PROFILE) {
+      if (openingRehab) window.Rehab?.open();
+      else window.Rehab?.render();
+    }
     requestAnimationFrame(() => updateSlidingIndicators());
   };
 
