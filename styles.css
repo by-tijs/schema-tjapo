@@ -1794,7 +1794,21 @@ h1 {
   display: block;
   width: 100%;
   height: 300px;
+  touch-action: pan-y pinch-zoom;
+  cursor: crosshair;
+  -webkit-user-select: none;
+  user-select: none;
 }
+
+.chart-stage canvas:focus-visible { outline: 1px solid var(--text-dim); outline-offset: -2px; }
+.chart-crosshair, .chart-marker, .chart-tooltip { position: absolute; pointer-events: none; }
+.chart-crosshair { width: 1px; background: var(--text-dim); opacity: .6; }
+.chart-marker { width: 12px; height: 12px; border: 2px solid var(--text); background: var(--panel-3); border-radius: 50%; transform: translate(-50%, -50%); }
+.chart-tooltip { z-index: 2; top: 12px; width: max-content; max-width: min(240px, calc(100% - 24px)); padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #151515; box-shadow: 0 4px 20px #0006; color: var(--text); font-size: .8rem; line-height: 1.4; overflow-wrap: anywhere; }
+.chart-tooltip strong, .chart-tooltip span { display: block; }
+.chart-tooltip strong { font-size: 1.05rem; margin: 2px 0; }
+.chart-tooltip span { color: var(--text-dim); }
+.chart-hint { margin: 0; font-size: .72rem; line-height: 1.4; color: var(--text-dim); }
 
 .chart-stage .empty-state {
   position: absolute;

@@ -3,7 +3,7 @@
 // A profile selects an account; Firebase authentication and rules grant access.
 const USER_PROFILE = location.pathname?.endsWith("/jochem.html")
   || new URLSearchParams(location.search).get("profiel")?.trim().toLowerCase() === "jochem"
-  ? Object.freeze({ id: "jochem", name: "Jochem", upperOnly: true,
+  ? Object.freeze({ id: "jochem", name: "Jochem",
       uid: "4XLfELa1AoeC4tcqBdW3e4Bz29o1", email: "jochem@schema-tjapo.invalid" })
   : null;
 const STORAGE_KEY = "herpakkingsseason.tracker.v1" + (USER_PROFILE ? `:user:${USER_PROFILE.uid}` : "");
@@ -48,7 +48,8 @@ const sessions = [
     cycle: true,
     exercises: [
       compoundBodyweight("weighted-pull-ups", "Weighted pull ups", 2),
-      unilateral("single-cable-press", "Single cable press", 2, "-22"),
+      USER_PROFILE ? unilateral("single-cable-press", "Single cable press", 2, "-22")
+        : compound("flat-smith", "Flat smith", 2),
       unilateral("cuffed-laterial", "Cuffed Laterial", 2, "-25"),
       ex("db-incline-curls", "Db incline curls", 2),
       ex("jm-press", "JM press", 2, "hoogste"),
@@ -171,11 +172,28 @@ const sessions = [
       compound("db-press", "DB press", 2),
     ],
   },
-].filter((session) => !USER_PROFILE?.upperOnly || session.group !== "Lower")
+].filter((session) => !USER_PROFILE || !["lower-c", "lower-d"].includes(session.id))
   .map((session) => {
-    if (!USER_PROFILE?.upperOnly) return session;
+    if (!USER_PROFILE) return session;
     if (session.group === "Upper") {
-      return { ...session, exercises: [compound("bench-press", "Bench Press", 2), ...session.exercises] };
+      return { ...session, exercises: [compound("bench-press", "Bench Press", 2),
+        ...session.exercises.filter((exercise) => !exercise.id.startsWith("smith-traps-"))] };
+    }
+    if (session.id === "lower-a") {
+      return { ...session, exercises: [
+        compound("squat", "Squat", 2),
+        ex("seated-leg-curl", "Seated leg curl", 2),
+        ex("leg-extension", "Leg extension", 2),
+      ] };
+    }
+    if (session.id === "lower-b") {
+      return { ...session, exercises: [
+        compound("deadlift", "Deadlift", 2),
+        ex("leg-extension", "Leg extension", 2),
+        ex("seated-leg-curl", "Seated leg curl", 2),
+        unilateral("cable-hip-abduction", "Cable hip abduction", 2),
+        unilateral("cable-hip-adduction", "Cable hip adduction", 2),
+      ] };
     }
     return session.id === "overig"
       ? { ...session, exercises: session.exercises.filter((exercise) => exercise.id !== "deadlift") }
@@ -184,8 +202,10 @@ const sessions = [
 
 const cycleOrder = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-c", "lower-c", "upper-d", "lower-d"]
   .filter((id) => sessions.some((session) => session.id === id));
-const CHART_GROUPS = ["Upper", "Lower", "Running", "Gewicht"]
-  .filter((group) => !USER_PROFILE?.upperOnly || group !== "Lower");
+const CHART_GROUPS = ["Upper", "Lower", "Running", "Gewicht"];
+// Keep the retired press selectable in Tijs' Stats without renaming its old data.
+const ARCHIVED_UPPER_EXERCISES = USER_PROFILE ? []
+  : [unilateral("single-cable-press", "Single cable press", 2, "-22")];
 const STRENGTH_INDEX_METRIC = "strength:index";
 const BODYWEIGHT_METRIC = "bodyweight:kg";
 const RUN_5K_METRIC = "run:5k-estimate";
@@ -278,7 +298,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "201";
+const APP_VERSION = "202";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -292,6 +312,7 @@ let saveTimer = null;
 let stateDirty = false;
 let deferredInstallPrompt = null;
 let resizeTimer = null;
+let chartInteraction = null;
 let pendingConfirmAction = null;
 let suppressSessionClick = false;
 let suppressSessionClickUntil = 0;
@@ -529,6 +550,10 @@ function bindElements() {
   els.chartCanvas = document.getElementById("e1rm-chart");
   els.chartEmpty = document.getElementById("e1rm-empty");
   els.chartReadout = document.getElementById("chart-readout");
+  els.chartTooltip = document.getElementById("chart-tooltip");
+  els.chartCrosshair = document.getElementById("chart-crosshair");
+  els.chartMarker = document.getElementById("chart-marker");
+  els.chartHint = document.getElementById("chart-hint");
   els.recordsList = document.getElementById("records-list");
   els.weightDateButton = document.getElementById("weight-date-button");
   els.weightDateLabel = document.getElementById("weight-date-label");
@@ -561,6 +586,7 @@ function bindElements() {
 }
 
 function installListeners() {
+  installChartInteraction();
   document.body.addEventListener("click", handleSlidingIndicatorIntent, true);
   document.body.addEventListener("click", handleClick);
   document.body.addEventListener("input", handleInput);
@@ -3304,9 +3330,7 @@ function resetCycle() {
   openConfirmModal({
     action: "reset-cycle",
     title: "Cyclus opnieuw beginnen?",
-    message: USER_PROFILE?.upperOnly
-      ? "Alle groene upper cycluskleuren worden gewist. Overig doet niet mee."
-      : "Alle groene upper/lower cycluskleuren worden gewist. Overig doet niet mee.",
+    message: "Alle groene upper/lower cycluskleuren worden gewist. Overig doet niet mee.",
     confirmLabel: "Reset cyclus",
   });
 }
@@ -3451,10 +3475,12 @@ function renderProfileAccount() {
   const account = profileAccount;
   const activating = Boolean(account ? account.invitation : profileInvitation);
   const loggedIn = Boolean(account?.authenticated && account?.ready && !activating);
+  const loading = !activating && (!account || account.initializing || (account.authenticated && !account.ready));
   const status = account?.status || "Account laden…";
   document.querySelector(".app-shell").hidden = !loggedIn;
   document.getElementById("profile-access").hidden = loggedIn;
-  document.getElementById("profile-access-title").textContent = activating ? "Kies je wachtwoord" : "Inloggen";
+  document.getElementById("profile-access-title").textContent = activating ? "Kies je wachtwoord" : loading ? "Schema openen…" : "Inloggen";
+  document.getElementById("profile-login").hidden = loading;
   document.getElementById("profile-access-status").textContent = status;
   document.getElementById("profile-confirm-field").hidden = !activating;
   document.getElementById("profile-login-instead").hidden = !activating;
@@ -4213,6 +4239,15 @@ function getLatestActivitySnapshot(target) {
   return getActivityHistory(target, 1)[0] || null;
 }
 
+// Historical workouts are the source of truth, even after an exercise leaves the plan.
+function getRecordedProgramExercises(workout, session) {
+  return Object.entries(workout.exercises || {}).map(([id, entry]) => {
+    const exercise = session?.exercises.find((item) => item.id === id);
+    return { ...exercise, id, name: entry.name || exercise?.name || id,
+      setup: entry.setup ?? exercise?.setup ?? "", isometric: entry.isometric ?? exercise?.isometric };
+  });
+}
+
 function getHistoryActivityEntries(historyEntry) {
   const cache = getHistoryCache();
   const cacheKey = historyEntry.id || getHistorySortKey(historyEntry);
@@ -4225,7 +4260,7 @@ function getHistoryActivityEntries(historyEntry) {
     return [];
   }
 
-  const programEntries = session.exercises
+  const programEntries = getRecordedProgramExercises(workout, session)
     .map((exercise) => {
       const entry = workout.exercises?.[exercise.id];
       if (!entry) return null;
@@ -4832,9 +4867,7 @@ function getWorkoutVolume(workout) {
 }
 
 function getAllWorkoutEntries(workout, session = findSession(workout.sessionId)) {
-  const base = session?.exercises
-    ? session.exercises.map((exercise) => workout.exercises?.[exercise.id]).filter(Boolean)
-    : Object.values(workout.exercises || {});
+  const base = Object.values(workout.exercises || {});
   if (session?.id !== "overig") return base;
   return [...base.filter(hasLoggedEntry), ...(workout.customItems || [])];
 }
@@ -5043,7 +5076,7 @@ function getStrengthRecords(group, filter, rangeDays = getStatsRangeDays()) {
     const workout = historyEntry.workout;
     if (!session || !workout || session.group !== group) return;
 
-    session.exercises
+    getRecordedProgramExercises(workout, session)
       .filter((exercise) => matchesChartFilter(exercise, group, filter))
       .forEach((exercise) => {
         const entry = workout.exercises?.[exercise.id];
@@ -5203,9 +5236,15 @@ function getChartMetrics(group, filter = "all") {
   }
 
   const metricsByKey = new Map();
-  sessions
-    .filter((session) => session.group === group)
-    .flatMap((session) => session.exercises)
+  const catalog = sessions.filter((session) => session.group === group).flatMap((session) => session.exercises);
+  if (group === "Upper") catalog.push(...ARCHIVED_UPPER_EXERCISES);
+  getSortedHistoryAsc().forEach((historyEntry) => {
+    const session = findSession(historyEntry.sessionId);
+    if (session?.group === group && historyEntry.workout) {
+      catalog.push(...getRecordedProgramExercises(historyEntry.workout, session));
+    }
+  });
+  catalog
     .filter((exercise) => matchesChartFilter(exercise, group, filter))
     .filter((exercise) => !exercise.isometric)
     .forEach((exercise) => {
@@ -5298,7 +5337,7 @@ function getStrengthIndexMeasurements(historyEntry, group, filter = "all") {
   if (!session || !workout || session.group !== group) return [];
 
   const measurements = new Map();
-  session.exercises.forEach((exercise) => {
+  getRecordedProgramExercises(workout, session).forEach((exercise) => {
     if (!matchesChartFilter(exercise, group, filter)) return;
     const entry = workout.exercises?.[exercise.id];
     const score = getExerciseFirstSetE1rm(entry);
@@ -5351,7 +5390,7 @@ function getExerciseTrendMeasurement(historyEntry, exerciseKey) {
   if (!session || !workout) return null;
 
   let best = null;
-  session.exercises.forEach((exercise) => {
+  getRecordedProgramExercises(workout, session).forEach((exercise) => {
     const entry = workout.exercises?.[exercise.id];
     const name = entry?.name || getProgramExerciseName(exercise);
     if (getStrengthActivityKey(name, entry?.setup ?? exercise.setup) !== exerciseKey) return;
@@ -5775,11 +5814,110 @@ function formatTrendProgress(firstValue, latestValue, metric) {
   return `${percent > 0 ? "+" : ""}${formatNumber(percent)}%`;
 }
 
+function installChartInteraction() {
+  const canvas = els.chartCanvas;
+  canvas.addEventListener("pointerdown", (event) => {
+    if (event.isPrimary === false || event.button > 0 || !chartInteraction?.points.length) return;
+    chartInteraction.pointerId = event.pointerId;
+    canvas.setPointerCapture(event.pointerId);
+    inspectChartAtPointer(event);
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (event.isPrimary === false) return;
+    if (event.pointerType === "mouse" || event.pointerType === "pen" || chartInteraction?.pointerId === event.pointerId) {
+      inspectChartAtPointer(event);
+    }
+  });
+  canvas.addEventListener("pointerup", (event) => {
+    if (chartInteraction?.pointerId !== event.pointerId) return;
+    inspectChartAtPointer(event);
+    chartInteraction.pointerId = null;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  });
+  canvas.addEventListener("pointercancel", clearChartInspection);
+  canvas.addEventListener("pointerleave", (event) => {
+    if (event.pointerType === "mouse" && chartInteraction?.pointerId == null) clearChartInspection();
+  });
+  canvas.addEventListener("focus", () => {
+    if (chartInteraction?.points.length && chartInteraction.selectedIndex == null) showChartPoint(chartInteraction.points.length - 1);
+  });
+  canvas.addEventListener("blur", clearChartInspection);
+  canvas.addEventListener("keydown", (event) => {
+    if (!chartInteraction?.points.length) return;
+    const last = chartInteraction.points.length - 1;
+    const index = chartInteraction.selectedIndex ?? last;
+    const next = { ArrowLeft: Math.max(0, index - 1), ArrowRight: Math.min(last, index + 1), Home: 0, End: last }[event.key];
+    if (event.key === "Escape") { clearChartInspection(); event.preventDefault(); }
+    else if (next !== undefined) { showChartPoint(next); event.preventDefault(); }
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target !== canvas) clearChartInspection();
+  }, { passive: true });
+}
+
+function nearestChartPointIndex(x, positions) {
+  if (!positions.length) return -1;
+  return positions.reduce((best, point, index) =>
+    Math.abs(point.x - x) < Math.abs(positions[best].x - x) ? index : best, 0);
+}
+
+function inspectChartAtPointer(event) {
+  if (!chartInteraction?.points.length) return;
+  const bounds = els.chartCanvas.getBoundingClientRect();
+  if (!bounds.width) return;
+  const x = (event.clientX - bounds.left) * chartInteraction.width / bounds.width;
+  showChartPoint(nearestChartPointIndex(x, chartInteraction.positions));
+}
+
+function clearChartInspection() {
+  if (chartInteraction) {
+    chartInteraction.selectedIndex = null;
+    chartInteraction.pointerId = null;
+  }
+  [els.chartTooltip, els.chartCrosshair, els.chartMarker].forEach((element) => {
+    if (element) element.hidden = true;
+  });
+}
+
+function chartPointDescription(point, metric) {
+  return {
+    date: formatDate(point.date),
+    value: formatChartValue(point.value, metric.value),
+    label: [metric.label, point.label].filter(Boolean).join(" · "),
+  };
+}
+
+function showChartPoint(index) {
+  const chart = chartInteraction;
+  if (!chart?.points[index]) return;
+  const { x, y } = chart.positions[index];
+  const detail = chartPointDescription(chart.points[index], chart.metric);
+  const tooltip = els.chartTooltip;
+  if (chart.selectedIndex !== index || tooltip.hidden) {
+    tooltip.innerHTML = `<span>${escapeHtml(detail.date)}</span><strong>${escapeHtml(detail.value)}</strong><span>${escapeHtml(detail.label)}</span>`;
+  }
+  chart.selectedIndex = index;
+  tooltip.hidden = false;
+  // Keep the readout away from the finger and inside narrow mobile charts.
+  tooltip.style.left = `${Math.max(12, Math.min(chart.width - tooltip.offsetWidth - 12, x - tooltip.offsetWidth / 2))}px`;
+  const line = els.chartCrosshair;
+  line.hidden = false;
+  line.style.left = `${x}px`;
+  line.style.top = `${chart.top}px`;
+  line.style.height = `${chart.plotHeight}px`;
+  const marker = els.chartMarker;
+  marker.hidden = false;
+  marker.style.left = `${x}px`;
+  marker.style.top = `${y}px`;
+}
+
 function drawTrendCanvas(points, metric) {
+  clearChartInspection();
+  chartInteraction = null;
   const canvas = els.chartCanvas;
   const wrapper = canvas.parentElement;
   const dpr = window.devicePixelRatio || 1;
-  const cssWidth = Math.max(320, Math.floor(wrapper?.clientWidth || 720));
+  const cssWidth = Math.max(1, Math.floor(wrapper?.clientWidth || 720));
   const cssHeight = Math.max(260, Math.floor(canvas.clientHeight || 320));
   canvas.width = cssWidth * dpr;
   canvas.height = cssHeight * dpr;
@@ -5789,6 +5927,7 @@ function drawTrendCanvas(points, metric) {
   const ctx = canvas.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssWidth, cssHeight);
+  if (els.chartHint) els.chartHint.hidden = !points.length;
 
   if (!points.length) {
     canvas.hidden = true;
@@ -5818,6 +5957,9 @@ function drawTrendCanvas(points, metric) {
   const range = max - min || 1;
   const xFor = (index) => pad.left + (points.length === 1 ? plotWidth / 2 : (plotWidth * index) / (points.length - 1));
   const yFor = (value) => pad.top + plotHeight - ((value - min) / range) * plotHeight;
+  chartInteraction = { points, metric, width: cssWidth, top: pad.top, plotHeight,
+    positions: points.map((point, index) => ({ x: xFor(index), y: yFor(point.value) })),
+    selectedIndex: null, pointerId: null };
 
   ctx.lineWidth = 1;
   ctx.strokeStyle = line;

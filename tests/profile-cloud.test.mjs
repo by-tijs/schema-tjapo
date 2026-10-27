@@ -38,6 +38,46 @@ test('A saved workout restores in a fresh authenticated session',async()=>{
  assert.equal(b.state.history[0].reps,8);assert.equal(b.account.meta.pending,false);
  assert.equal(a.account.ref,`users/${uid}/schemaTjapo/state`);
 });
+test('A verified returning session opens its cache before slow Firestore initialization and download',async()=>{
+ const cached={history:[{id:'local-workout'}]};
+ const a=fixture({storage:new Map([[key,JSON.stringify(cached)]]),remote:{revision:2,state:{history:[{id:'remote-workout'}]}}});
+ let releaseDatabase, releaseDownload;
+ a.account.databaseReady=new Promise(resolve=>releaseDatabase=resolve);
+ a.account.dbApi.getDocFromServer=()=>new Promise(resolve=>releaseDownload=()=>resolve({exists:()=>true,data:()=>a.remote}));
+ const opening=a.account.onSession({uid});
+ assert.equal(a.account.initializing,false);
+ assert.equal(a.account.authenticated,true);
+ assert.equal(a.account.ready,true);
+ assert.equal(a.state.history[0].id,'local-workout');
+ releaseDatabase();await new Promise(setImmediate);
+ assert.equal(a.account.ready,true);
+ releaseDownload();await opening;
+ assert.equal(a.state.history[0].id,'remote-workout');
+});
+test('A fresh device waits for the first cloud state, without granting access to cached data while signed out',async()=>{
+ const a=fixture({remote:{revision:2,state:{history:[{id:'remote'}]}}});
+ let release;
+ a.account.databaseReady=new Promise(resolve=>release=resolve);
+ const opening=a.account.onSession({uid});
+ assert.equal(a.account.ready,false);
+ release();await opening;
+ assert.equal(a.account.ready,true);
+ await a.account.onSession(null);
+ assert.equal(a.account.authenticated,false);
+ assert.equal(a.account.ready,false);
+ assert.equal(a.state.history,undefined);
+});
+test('Edits during background startup cannot be overwritten by a newer remote revision',async()=>{
+ const a=fixture({storage:new Map([[key,JSON.stringify({history:[{id:'cached'}]})]])});
+ let release;
+ a.account.dbApi.getDocFromServer=()=>new Promise(resolve=>release=()=>resolve({exists:()=>true,data:()=>({revision:3,state:{history:[{id:'remote'}]}})}));
+ const opening=a.account.onSession({uid});await Promise.resolve();
+ a.state={history:[{id:'new-local-edit'}]};a.account.markEdited();a.account.queueSave();
+ release();await opening;
+ assert.equal(a.state.history[0].id,'new-local-edit');
+ assert.equal(a.account.conflict.revision,3);
+ assert.equal(a.account.meta.pending,true);
+});
 test('Only Jochem’s legacy browser data is migrated; owner data stays untouched',async()=>{
  const owner=JSON.stringify({history:[{id:'owner'}]});
  const legacy=JSON.stringify({history:[{id:'jochem'}]});

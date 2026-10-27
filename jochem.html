@@ -8,25 +8,25 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Schema Jochem">
   <title>Schema Jochem</title>
-  <link rel="manifest" href="manifest-jochem.webmanifest?v=201">
-  <link rel="icon" href="favicon.ico?v=201" type="image/x-icon" sizes="any">
-  <link rel="icon" href="favicon-32.png?v=201" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=201" sizes="180x180">
+  <link rel="manifest" href="manifest-jochem.webmanifest?v=202">
+  <link rel="icon" href="favicon.ico?v=202" type="image/x-icon" sizes="any">
+  <link rel="icon" href="favicon-32.png?v=202" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=202" sizes="180x180">
   <link rel="preload" href="fonts/kh-teka-regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=201">
-  <link rel="stylesheet" href="mono-preview.css?v=201">
+  <link rel="stylesheet" href="styles.css?v=202">
+  <link rel="stylesheet" href="mono-preview.css?v=202">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=201" defer></script>
-  <script src="profile-cloud.js?v=201" defer></script>
-  <script src="app-updates.js?v=201" defer></script>
-  <script src="app.js?v=201" defer></script>
+  <script src="firebase-config.js?v=202" defer></script>
+  <script src="profile-cloud.js?v=202" defer></script>
+  <script src="app-updates.js?v=202" defer></script>
+  <script src="app.js?v=202" defer></script>
 </head>
 <body>
   <section id="profile-access" class="profile-access" aria-labelledby="profile-access-title" hidden>
     <div class="profile-access-card">
-      <h1 id="profile-access-title">Inloggen</h1>
+      <h1 id="profile-access-title">Schema openen…</h1>
       <p id="profile-access-status" class="record-meta" role="status">Account laden…</p>
-      <form id="profile-login" class="profile-login">
+      <form id="profile-login" class="profile-login" hidden>
         <label class="field"><span>Gebruikersnaam</span>
           <input id="profile-username" class="cloud-input" name="username" autocomplete="username" value="jochem" readonly>
         </label>
@@ -132,9 +132,13 @@
             </label>
           </div>
           <div class="chart-stage">
-            <canvas id="e1rm-chart" width="900" height="340" aria-label="Trendgrafiek"></canvas>
+            <canvas id="e1rm-chart" width="900" height="340" tabindex="0" aria-label="Trendgrafiek" aria-describedby="chart-hint"></canvas>
+            <div id="chart-crosshair" class="chart-crosshair" hidden aria-hidden="true"></div>
+            <div id="chart-marker" class="chart-marker" hidden aria-hidden="true"></div>
+            <div id="chart-tooltip" class="chart-tooltip" role="status" aria-live="polite" aria-atomic="true" hidden></div>
             <div id="e1rm-empty" class="empty-state" hidden>Nog geen data voor deze keuze.</div>
           </div>
+          <p id="chart-hint" class="chart-hint" hidden>Raak de grafiek aan en schuif voor details. Met een toetsenbord: gebruik de pijltjes.</p>
           <div id="chart-readout" class="chart-readout"></div>
         </section>
         <div id="records-list" class="records-list"></div>
@@ -292,8 +296,8 @@
     </button>
   </div>
 
-  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=201" preload="none" muted loop playsinline aria-hidden="true"></audio>
-  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=201" preload="none" muted playsinline aria-hidden="true"></audio>
+  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=202" preload="none" muted loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=202" preload="none" muted playsinline aria-hidden="true"></audio>
 
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>

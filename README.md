@@ -31,11 +31,11 @@ De vaste installatiepagina voor Jochem is `jochem.html`. Deze levert vanaf het e
 
 Na een wijziging in `index.html`: voer `node scripts/generate-jochem-page.mjs` uit en commit ook `jochem.html`. De tests controleren dat de pagina's gelijk blijven behalve de installatiegegevens.
 
-`index.html?profiel=jochem` opent het upper-profiel met gebruikersnaam `jochem`. Elke Upper begint met twee sets Bench Press. Lower ontbreekt in trainingen, cyclus en statistieken; Overig bevat geen deadlift. Jochem kiest via zijn eenmalige activatielink zelf een wachtwoord (minimaal 12 tekens). De naam boven de trainingstitel is verwijderd.
+`index.html?profiel=jochem` opent het profiel met gebruikersnaam `jochem`. Elke Upper begint met twee sets Bench Press en bevat geen Smith traps. Lower A bevat Squat, Seated leg curl en Leg extension. Lower B bevat Deadlift, Leg extension, Seated leg curl, Cable hip abduction en Cable hip adduction. Deze oefeningen hebben elk twee sets; de kabeloefeningen worden per kant gelogd. Overig bevat geen deadlift. Jochem kiest via zijn eenmalige activatielink zelf een wachtwoord (minimaal 12 tekens). De naam boven de trainingstitel is verwijderd.
 
 Firebase Authentication gebruikt intern een gereserveerd loginadres; er wordt geen e-mail verstuurd. Het account heeft een vaste UID en een aparte Firebase-app/authsessie. Firestore laat uitsluitend de eigenaar en Jochem hun eigen `schemaTjapo`-documenten lezen en schrijven. De profielnaam in de URL geeft op zichzelf geen toegang. Zonder persoonlijk e-mailadres verloopt accountherstel via de beheerder.
 
-Voortgang wordt onder de UID lokaal bewaard en naar Firestore gesynchroniseerd. Na inloggen wordt online voortgang opgehaald; nog niet gesynchroniseerde lokale wijzigingen blijven bewaard en worden bij herstel van de verbinding opnieuw geprobeerd. Bestaande lokale Jochem-invoer wordt bij de eerste login gekopieerd (de oude kopie blijft staan). De gewone URL behoudt de oorspronkelijke opslag en het schema van Tijs.
+Voortgang wordt onder de UID lokaal bewaard en naar Firestore gesynchroniseerd. Na herstel van de Firebase-sessie opent een terugkerende gebruiker direct de eigen lokale voortgang; Firestore wordt op de achtergrond geladen en gesynchroniseerd. Het inlogformulier verschijnt alleen wanneer de sessiecontrole klaar is en opnieuw inloggen nodig is. Een nieuw apparaat wacht op de eerste cloudgegevens voordat invoer mogelijk is; nog niet gesynchroniseerde lokale wijzigingen blijven bewaard en worden bij herstel van de verbinding opnieuw geprobeerd. Bestaande lokale Jochem-invoer wordt bij de eerste login gekopieerd (de oude kopie blijft staan). De gewone URL behoudt de oorspronkelijke opslag en het schema van Tijs.
 
 Cloudschrijfacties gebruiken een transactie en revisienummer. Als een ander apparaat dezelfde voortgang heeft gewijzigd, wordt geen versie stilzwijgend overschreven. De gebruiker kiest de versie; de vervangen versie blijft als downloadbare lokale herstelkopie beschikbaar. Stats > Export/Import blijft beschikbaar voor eigen backups.
 
@@ -48,3 +48,7 @@ Geluiden staan standaard uit voor beide accounts. De instelling onderaan Stats w
 Verificatie: `node --test tests/*.test.mjs tests/history.test.cjs`.
 
 De app controleert bij openen, terugkomst en tijdens gebruik op een nieuwe versie. Een beschikbare update verschijnt bovenaan; onderaan Stats staat altijd App bijwerken met het profiel en de huidige versie. Bijwerken bewaart eerst de lokale voortgang en de markering voor cloudsynchronisatie, en herlaadt daarna dezelfde profiellink. Er wordt niet automatisch herladen tijdens een training en er wordt geen account- of trainingsopslag gewist. Een al geopende versie van vóór deze update heeft eenmalig een volledige herstart of herlaadactie nodig.
+
+Tijs heeft in Upper A twee sets Flat smith in plaats van Single cable press. De oude oefening blijft beschikbaar in Stats, met behoud van historische sets, grafieken en records. Historische oefeningen worden vanuit de opgeslagen training gelezen, onafhankelijk van het huidige schema.
+
+Stats toont datum en meetwaarde bij aanwijzen, aanraken of horizontaal schuiven over de grafiek. De pijltjestoetsen en Home/End werken ook. Verticaal scrollen blijft beschikbaar.

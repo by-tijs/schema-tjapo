@@ -26,12 +26,20 @@ test('Jochem starts empty even on a browser containing the owner’s progress', 
   assert.equal(reloaded.run('getActiveWorkout().exercises["weighted-pull-ups"].sets[0].reps'), '8');
   assert.equal(app('',storage).run('state.history[0].id'), 'owner-history');
 });
-test('Jochem has four upper sessions, and cycles directly through them', () => {
+test('Jochem has two lower days in the cycle and Stats, with the requested exercise order', () => {
   const j = app('?profiel=jochem');
-  assert.equal(j.run('sessions.some(s => s.group === "Lower")'),false);
-  assert.equal(j.run('CHART_GROUPS.includes("Lower")'),false);
-  assert.equal(j.run('sessions.some(s => s.exercises.some(e => e.id === "deadlift"))'),false);
-  for (const [completed,next] of [['upper-a','upper-b'],['upper-b','upper-c'],['upper-c','upper-d'],['upper-d','upper-a']]) {
+  assert.equal(j.run('CHART_GROUPS.includes("Lower")'),true);
+  assert.deepEqual(JSON.parse(j.run('JSON.stringify(sessions.filter(s => s.group === "Lower").map(s => s.label))')), ['Lower A','Lower B']);
+  for (const [id, names] of [
+    ['lower-a',['Squat','Seated leg curl','Leg extension']],
+    ['lower-b',['Deadlift','Leg extension','Seated leg curl','Cable hip abduction','Cable hip adduction']],
+  ]) {
+    assert.deepEqual(JSON.parse(j.run(`JSON.stringify(findSession('${id}').exercises.map(e => e.name))`)), names);
+    assert.equal(j.run(`findSession('${id}').exercises.every(e => e.setCount === 2)`), true);
+  }
+  assert.equal(j.run('findSession("lower-b").exercises.slice(-2).every(e => e.unilateral)'), true);
+  assert.equal(j.run('findSession("overig").exercises.some(e => e.id === "deadlift")'), false);
+  for (const [completed,next] of [['upper-a','lower-a'],['lower-a','upper-b'],['upper-b','lower-b'],['lower-b','upper-c'],['upper-c','upper-d'],['upper-d','upper-a']]) {
     assert.equal(j.run(`advanceCycle('${completed}'); getNextSession().id`), next);
   }
 });
@@ -63,7 +71,7 @@ test('The installed Jochem app opens the same local profile', () => {
   const installed = app(url.search, new Map(), url.pathname);
   assert.equal(installed.run('USER_PROFILE.id'), 'jochem');
   assert.equal(installed.run('STORAGE_KEY'), app('?profiel=jochem').run('STORAGE_KEY'));
-  assert.equal(installed.run('sessions.filter(s => s.group === "Lower").length'), 0);
+  assert.equal(installed.run('sessions.filter(s => s.group === "Lower").length'), 2);
   assert.equal(installed.run('sessions[0].exercises[0].name'), 'Bench Press');
   assert.equal(manifest.id, './index.html?profiel=jochem');
   assert.equal(manifest.name, 'Schema Jochem');
@@ -161,4 +169,33 @@ test('An explicitly recorded personal weight of 94kg remains valid for Jochem', 
   j.run(`setDailyBodyweight('2026-09-16','94'); ensureDefaults();`);
   assert.equal(j.run('state.bodyweight'), '94');
   assert.equal(j.run('getWorkout("upper-b","2026-09-17").exercises["weighted-dips"].bodyweight'), '94');
+});
+
+test('Only Tijs replaces the cable press and only Jochem removes Smith traps', () => {
+  const t = app(), j = app('?profiel=jochem');
+  assert.equal(t.run('findSession("upper-a").exercises[1].name'), 'Flat smith');
+  assert.equal(t.run('findSession("upper-a").exercises[1].setCount'), 2);
+  assert.equal(t.run('Boolean(findSession("upper-a").exercises[1].unilateral)'), false);
+  assert.equal(j.run('findSession("upper-a").exercises.some(e => e.name === "Single cable press")'), true);
+  assert.equal(j.run('sessions.some(s => s.exercises.some(e => e.name === "Smith traps"))'), false);
+  assert.equal(t.run('sessions.flatMap(s => s.exercises).filter(e => e.name === "Smith traps").length'), 4);
+});
+
+test('Retired cable press data remains in Stats and history, separate from Flat smith', () => {
+  const t = app();
+  t.run(`const oldPress = makeExerciseEntry(ARCHIVED_UPPER_EXERCISES[0]);
+    oldPress.sets = [{left:{weight:'25',reps:'8',rpe:'9'},right:{weight:'25',reps:'8',rpe:'9'}}];
+    const oldWorkout = {sessionId:'upper-a',date:today(),exercises:{'single-cable-press':oldPress},customItems:[]};
+    const oldHistory = {id:'old-upper',sessionId:'upper-a',sessionGroup:'Upper',sessionLabel:'Upper A',date:today(),workout:oldWorkout};
+    state.history = [oldHistory];
+    state.workouts[workoutKey('upper-a',today())] = structuredClone(oldWorkout);`);
+  assert.equal(t.run('getChartMetrics("Upper","push").some(m => m.label === "Single cable press")'),true);
+  assert.equal(t.run('getTrendPoints("Upper",makeExerciseMetricValue("Single cable press","-22")).length'),1);
+  assert.equal(t.run('getTrendPoints("Upper",makeExerciseMetricValue("Flat smith","")).length'),0);
+  assert.equal(t.run('getStrengthRecords("Upper","push")[0].name'),'Single cable press');
+  assert.equal(t.run('getStrengthIndexMeasurements(oldHistory,"Upper","push").length'),1);
+  assert.equal(t.run('getHistoryActivityEntries(oldHistory)[0].name'),'Single cable press');
+  assert.equal(t.run('getActiveWorkout().exercises["single-cable-press"].sets[0].left.weight'),'25');
+  assert.equal(t.run('getActiveWorkout().exercises["flat-smith"].sets.every(s => !s.weight && !s.reps)'),true);
+  assert.equal(t.run('getWorkoutVolume(oldWorkout)'),400);
 });

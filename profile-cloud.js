@@ -5,6 +5,7 @@ class ProfileAccount {
   constructor(options) {
     Object.assign(this, options);
     this.authenticated = false;
+    this.initializing = true;
     this.ready = false;
     this.busy = false;
     this.epoch = 0;
@@ -21,17 +22,18 @@ class ProfileAccount {
   notify(status) { if (status) this.status = status; this.onStatus(this); }
   async init(config, version) {
     try {
-      const [app, auth, db] = await Promise.all([
+      // Start Firestore in parallel, but do not make session restoration wait for it.
+      this.databaseReady = import(`https://www.gstatic.com/firebasejs/${version}/firebase-firestore.js`)
+        .then((db) => { this.dbApi = db; })
+        .catch((error) => { this.databaseError = error; });
+      const [app, auth] = await Promise.all([
         import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
         import(`https://www.gstatic.com/firebasejs/${version}/firebase-auth.js`),
-        import(`https://www.gstatic.com/firebasejs/${version}/firebase-firestore.js`),
       ]);
       this.authApi = auth;
-      this.dbApi = db;
       const name = `schema-tjapo-${this.profile.id}`;
       this.app = app.getApps().find((item) => item.name === name) || app.initializeApp(config, name);
       this.auth = auth.getAuth(this.app);
-      this.db = db.getFirestore(this.app);
       await auth.setPersistence(this.auth, auth.browserLocalPersistence);
       auth.onAuthStateChanged(this.auth, (user) => {
         if (!this.activating) this.onSession(user);
@@ -44,16 +46,19 @@ class ProfileAccount {
         if (this.authenticated && this.meta.pending && !this.conflict) this.sync();
       }, 30000);
     } catch {
+      this.initializing = false;
       this.notify("Account kon niet laden. Controleer je verbinding en herlaad de pagina.");
     }
   }
   async onSession(user) {
     if (user?.uid === this.profile.uid && this.authenticated) return;
+    this.initializing = false;
     const epoch = ++this.epoch;
     clearTimeout(this.timer);
     this.conflict = null;
     this.ready = false;
     this.authenticated = false;
+    this.ref = null;
     if (user && user.uid !== this.profile.uid) {
       await this.authApi.signOut(this.auth);
       this.notify("Dit account hoort niet bij dit profiel.");
@@ -73,8 +78,10 @@ class ProfileAccount {
       this.meta.pending = true;
       this.saveMeta();
     }
-    this.ref = this.dbApi.doc(this.db, "users", user.uid, "schemaTjapo", "state");
     this.onLoad(initial);
+    // A verified returning user can start from their own cache immediately.
+    // Fresh devices still wait for the initial cloud state before allowing edits.
+    this.ready = Boolean(cached || legacy);
     this.notify("Voortgang ophalen…");
     // A previous session may still be finishing a request; its epoch prevents it applying data.
     if (this.inFlight) await this.inFlight;
@@ -135,27 +142,31 @@ class ProfileAccount {
     this.timer = setTimeout(() => this.sync(), 1000);
   }
   sync() {
-    if (!this.authenticated || !this.ref || this.conflict) return Promise.resolve(false);
+    if (!this.authenticated || this.conflict) return Promise.resolve(false);
     if (this.inFlight) return this.inFlight;
     this.inFlight = this.performSync().finally(() => { this.inFlight = null; });
     return this.inFlight;
   }
   async performSync() {
     const epoch = this.epoch;
-    const ref = this.ref;
     const version = this.localVersion;
     const pending = this.meta.pending;
     const baseRevision = this.meta.revision || 0;
     const snapshot = structuredClone(this.getState());
+    // Bind the mutation id to this snapshot before any asynchronous SDK work.
+    const mutationId = pending ? (this.meta.mutationId || crypto.randomUUID()) : null;
+    if (pending) { this.meta.mutationId = mutationId; this.saveMeta(); }
     this.notify("Synchroniseren…");
     try {
+      if (this.databaseReady) await this.databaseReady;
+      if (epoch !== this.epoch) return false;
+      if (this.databaseError) throw this.databaseError;
+      this.db ||= this.dbApi.getFirestore(this.app);
+      const ref = this.ref ||= this.dbApi.doc(this.db, "users", this.profile.uid, "schemaTjapo", "state");
       let remote;
       let uploaded = false;
       let migratedRemote = false;
       if (pending) {
-        const mutationId = this.meta.mutationId || crypto.randomUUID();
-        this.meta.mutationId = mutationId;
-        this.saveMeta();
         remote = await this.dbApi.runTransaction(this.db, async (transaction) => {
           const doc = await transaction.get(ref);
           const previous = doc.exists() ? doc.data() : null;
