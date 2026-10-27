@@ -1,28 +1,28 @@
 "use strict";
 
-const CACHE_NAME = "schema-tjapo-cache-v202";
+const CACHE_NAME = "schema-tjapo-cache-v203";
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./jochem.html",
-  "./styles.css?v=202",
-  "./mono-preview.css?v=202",
+  "./styles.css?v=203",
+  "./mono-preview.css?v=203",
   "./fonts/kh-teka-regular.woff2",
-  "./firebase-config.js?v=202",
-  "./app.js?v=202",
-  "./profile-cloud.js?v=202",
-  "./app-updates.js?v=202",
-  "./rest-alarm.mp3?v=202",
-  "./side-alarm.mp3?v=202",
-  "./audio-unlock.mp3?v=202",
-  "./manifest.webmanifest?v=202",
-  "./manifest-jochem.webmanifest?v=202",
-  "./favicon.ico?v=202",
-  "./favicon-32.png?v=202",
-  "./apple-touch-icon.png?v=202",
-  "./icon-192.png?v=202",
-  "./icon-512.png?v=202",
-  "./icon-maskable-512.png?v=202",
+  "./firebase-config.js?v=203",
+  "./app.js?v=203",
+  "./profile-cloud.js?v=203",
+  "./app-updates.js?v=203",
+  "./rest-alarm.mp3?v=203",
+  "./side-alarm.mp3?v=203",
+  "./audio-unlock.mp3?v=203",
+  "./manifest.webmanifest?v=203",
+  "./manifest-jochem.webmanifest?v=203",
+  "./favicon.ico?v=203",
+  "./favicon-32.png?v=203",
+  "./apple-touch-icon.png?v=203",
+  "./icon-192.png?v=203",
+  "./icon-512.png?v=203",
+  "./icon-maskable-512.png?v=203",
 ];
 
 self.addEventListener("install", (event) => {

@@ -197,5 +197,15 @@ test('Retired cable press data remains in Stats and history, separate from Flat 
   assert.equal(t.run('getHistoryActivityEntries(oldHistory)[0].name'),'Single cable press');
   assert.equal(t.run('getActiveWorkout().exercises["single-cable-press"].sets[0].left.weight'),'25');
   assert.equal(t.run('getActiveWorkout().exercises["flat-smith"].sets.every(s => !s.weight && !s.reps)'),true);
+  assert.equal(t.run('getCompletion(getActiveWorkout()).total'),12);
+  assert.equal(t.run('getCompletion(getActiveWorkout()).done'),0);
   assert.equal(t.run('getWorkoutVolume(oldWorkout)'),400);
+});
+
+test('Removing Jochem traps preserves its stored sets without adding them to today’s completion target', () => {
+  const j=app('?profiel=jochem');
+  j.run(`const w=getActiveWorkout(); w.exercises['smith-traps-upper-a'] = {name:'Smith traps',unilateral:true,kind:'strength',sets:[{left:{weight:'30',reps:'8',rpe:'9'},right:{weight:'30',reps:'8',rpe:'9'}},{left:{weight:'30',reps:'8',rpe:'9'},right:{weight:'30',reps:'8',rpe:'9'}}]};`);
+  assert.equal(j.run('getCompletion(getActiveWorkout()).total'),12);
+  assert.equal(j.run('getCompletion(getActiveWorkout()).done'),0);
+  assert.equal(j.run('getActiveWorkout().exercises["smith-traps-upper-a"].sets.length'),2);
 });
