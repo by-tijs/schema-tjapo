@@ -153,11 +153,98 @@ test('exercise replacement uses a new identity and suggestions never copy previo
 
 test('editor entry points are owner-only and reuse existing button and card styles', () => {
   for (const file of ['plan-model.js', 'plan-editor.js', 'plan-editor.css']) assert.ok(read('sw.js').includes(file));
-  assert.match(read('index.html'), /href="#schema" data-schema-owner hidden/);
+  assert.match(read('index.html'), /href="#schema" data-view-link="schema" data-schema-owner hidden/);
   assert.match(read('index.html'), /data-view="schema" data-schema-owner/);
   const removed = [];
   const context = vm.createContext({ window: {}, document: { querySelectorAll: () => [{remove(){removed.push('link');}}, {remove(){removed.push('view');}}] } });
   vm.runInContext(read('plan-model.js') + '\n' + read('plan-editor.js'), context);
   context.window.PlanEditor.mount({ enabled:false });
   assert.deepEqual(removed, ['link','view']);
+});
+
+test('chosen muscle groups drive custom exercise metrics and remain stored with historical sets', () => {
+  const a = app();
+  a.run(`editPlan(plan => {
+    const day = window.PersonalPlan.addDay(plan, 'Mijn lower', 'Lower');
+    day.exercises.push(window.PersonalPlan.newExercise('Eigen oefening', 3, {muscleGroup:'calves'}));
+  });
+  var customDay = sessions.find(day => day.label === 'Mijn lower');
+  var customExercise = customDay.exercises[0];
+  var w = getWorkout(customDay.id, today());
+  w.exercises[customExercise.id].sets[0] = {weight:'60',reps:'8',rpe:'8'};
+  state.history = [{id:'muscle-group-test',sessionId:customDay.id,sessionLabel:customDay.label,sessionGroup:'Lower',date:today(),workout:structuredClone(w)}];
+  historyCache.ref = null;`);
+  assert.equal(a.run('getExerciseCategory(customExercise, "Lower")'), 'calves');
+  assert.equal(a.run('getChartMetrics("Lower", "calves").some(item => item.label === "Eigen oefening")'), true);
+  assert.equal(a.run('getChartMetrics("Lower", "legs").some(item => item.label === "Eigen oefening")'), false);
+  assert.equal(a.run('getStrengthIndexTrendPoints("Lower", "calves").length'), 1);
+  assert.equal(a.run('getStrengthRecords("Lower", "calves")[0].name'), 'Eigen oefening');
+  a.run(`editPlan(plan => { plan.days.find(day => day.id === customDay.id).exercises[0].muscleGroup='abs'; });`);
+  assert.equal(a.run('getRecordedProgramExercises(state.history[0].workout, getWorkoutSession(state.history[0].workout))[0].muscleGroup'), 'calves');
+  a.run(`editPlan(plan => { window.PersonalPlan.removeDay(plan, customDay.id); });`);
+  const b = app({ storage: a.storage });
+  assert.equal(b.run('getChartMetrics("Lower", "calves").some(item => item.label === "Eigen oefening")'), true);
+  assert.equal(b.run('getStrengthIndexTrendPoints("Lower", "calves").length'), 1);
+});
+
+test('muscle groups keep automatic classification compatible and reject unknown stored categories', () => {
+  const a = app();
+  assert.equal(a.run('getExerciseCategory({name:"Calve raises"}, "Lower")'), 'calves');
+  assert.equal(a.run('getExerciseCategory({name:"Eigen oefening",muscleGroup:"abs"}, "Lower")'), 'abs');
+  assert.equal(a.run('getExerciseCategory({name:"Bicep curls",muscleGroup:"abs"}, "Upper")'), 'abs');
+  a.run('var plan = getPersonalPlan(); plan.days[0].exercises[0].muscleGroup="invalid";');
+  assert.equal(a.run('window.PersonalPlan.valid(plan)'), false);
+  const jochem = app({search:'?profiel=jochem'});
+  assert.equal(jochem.run('getExerciseCategory({name:"Calve raises",muscleGroup:"abs"}, "Lower")'), 'calves');
+});
+
+test('Stats follows each exercise across freely named mixed training days', () => {
+  const a = app();
+  a.run(`editPlan(plan => {
+    const day = window.PersonalPlan.addDay(plan, 'Push + benen');
+    for (const [name, muscleGroup] of [['Mijn borst','push'],['Mijn benen','legs'],['Mijn nek','neck']]) {
+      day.exercises.push(window.PersonalPlan.newExercise(name, 3, {muscleGroup}));
+    }
+  });
+  var day = sessions.find(day => day.label === 'Push + benen');
+  var w = getWorkout(day.id, today());
+  Object.values(w.exercises).forEach(entry => entry.sets[0] = {weight:'40',reps:'8',rpe:'8'});
+  state.history = [{id:'mixed',sessionId:day.id,sessionLabel:day.label,sessionGroup:'Upper',date:today(),workout:structuredClone(w)}];
+  historyCache.ref = null;
+  var beforeHistory = JSON.stringify(state.history);`);
+  for (const [group, name] of [['Upper','Mijn borst'],['Lower','Mijn benen'],['Accessories','Mijn nek']]) {
+    assert.equal(a.run(`getChartMetrics('${group}').some(item => item.label === '${name}')`), true);
+    assert.deepEqual(a.json(`getStrengthRecords('${group}', 'all').map(item => item.name)`), [name]);
+    assert.equal(a.run(`getStrengthIndexTrendPoints('${group}').length`), 1);
+    assert.equal(a.run(`getTrendPoints('${group}', makeExerciseMetricValue('${name}')).length`), 1);
+  }
+  assert.equal(a.run('getTrendPoints("Lower", makeExerciseMetricValue("Mijn nek")).length'), 0);
+  a.run(`editPlan(plan => { plan.days.find(item => item.id === day.id).label = 'Pull'; });`);
+  assert.equal(a.run('getStrengthIndexTrendPoints("Accessories", "neck").length'), 1);
+  assert.equal(a.run('JSON.stringify(state.history) === beforeHistory'), true);
+});
+
+test('legacy neck, traps and grip move to Accessories without rewriting logged data', () => {
+  const a = app();
+  a.run(`var w = getWorkout('lower-a', today());
+    w.exercises['neck-extentsions'].sets[0] = {weight:'10',reps:'8',rpe:'8'};
+    state.history = [{id:'legacy-neck',sessionId:'lower-a',sessionGroup:'Lower',sessionLabel:'Lower A',date:today(),workout:structuredClone(w)}];
+    historyCache.ref = null;
+    var beforeHistory = JSON.stringify(state.history);`);
+  assert.equal(a.run('getChartMetrics("Accessories", "neck").some(item => item.label === "Neck extentsions")'), true);
+  assert.equal(a.run('getChartMetrics("Accessories", "traps").some(item => item.label === "Smith traps")'), true);
+  assert.equal(a.run('getChartMetrics("Accessories", "grip").some(item => item.label === "Db wrist curls")'), true);
+  assert.equal(a.run('getChartMetrics("Lower").some(item => /neck|wrist|traps/i.test(item.label))'), false);
+  assert.equal(a.run('getChartMetrics("Upper").some(item => /traps/i.test(item.label))'), false);
+  assert.equal(a.run('getStrengthIndexTrendPoints("Accessories", "neck").length'), 1);
+  assert.equal(a.run('getStrengthRecords("Accessories", "neck")[0].name'), 'Neck extentsions');
+  assert.equal(a.run('getTrendPoints("Accessories", makeExerciseMetricValue("Neck extentsions")).length'), 1);
+  assert.equal(a.run('JSON.stringify(state.history) === beforeHistory'), true);
+  assert.equal(a.run('getOwnerExerciseCategory({name:"Onbekend"})'), null);
+  for (const [name, category] of [['Db hamstring curls','legs'], ['Db wrist curls','grip'], ['Cable bends','abs'], ['Weighted pull ups','back'], ['Cuffed Laterial','shoulders']]) {
+    assert.equal(a.run(`getOwnerExerciseCategory({name:${JSON.stringify(name)}})`), category);
+  }
+  const jochem = app({search:'?profiel=jochem'});
+  assert.equal(jochem.run('CHART_GROUPS.includes("Accessories")'), false);
+  assert.equal(jochem.run('getChartFilters("Lower").some(item => item.value === "neck")'), true);
 });

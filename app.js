@@ -204,7 +204,7 @@ const DEFAULT_CYCLE_ORDER = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-
   .filter((id) => DEFAULT_SESSIONS.some((session) => session.id === id));
 let sessions = DEFAULT_SESSIONS;
 let cycleOrder = DEFAULT_CYCLE_ORDER;
-const CHART_GROUPS = ["Upper", "Lower", "Running", "Gewicht"];
+const CHART_GROUPS = USER_PROFILE ? ["Upper", "Lower", "Running", "Gewicht"] : ["Upper", "Lower", "Accessories", "Running", "Gewicht"];
 // Keep the retired press selectable in Tijs' Stats without renaming its old data.
 const ARCHIVED_UPPER_EXERCISES = USER_PROFILE ? []
   : [unilateral("single-cable-press", "Single cable press", 2, "-22")];
@@ -241,6 +241,18 @@ const CHART_FILTERS = {
   ],
   Running: [{ value: "all", label: "All" }],
   Gewicht: [{ value: "all", label: "All" }],
+};
+const OWNER_MUSCLE_GROUPS = {
+  Upper: [
+    { value: "push", label: "Borst" }, { value: "back", label: "Rug" },
+    { value: "shoulders", label: "Schouders" }, { value: "biceps", label: "Biceps" },
+    { value: "triceps", label: "Triceps" },
+  ],
+  Lower: [{ value: "legs", label: "Benen" }, { value: "calves", label: "Kuiten" }],
+  Accessories: [
+    { value: "neck", label: "Nek" }, { value: "traps", label: "Traps" },
+    { value: "grip", label: "Onderarmen / grip" }, { value: "abs", label: "Buik" },
+  ],
 };
 const MAX_EFFECTIVE_REPS_FOR_E1RM = 50;
 const MAX_RIR_FROM_RPE = 5;
@@ -300,7 +312,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "208";
+const APP_VERSION = "209";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -498,7 +510,8 @@ function init() {
   configureLocalProfile();
   window.Rehab?.mount({ enabled: !USER_PROFILE, getState: () => state, save: saveState, flush: flushStateSave, refreshIcons, notify: showToast });
   window.PlanEditor?.mount({ enabled: !USER_PROFILE, getPlan: getPersonalPlan, activeDay: () => state.activeSessionId,
-    commit: commitPersonalPlan, suggestions: getPlanSuggestions, refreshIcons });
+    commit: commitPersonalPlan, suggestions: getPlanSuggestions, muscleGroups: OWNER_MUSCLE_GROUPS, category: getOwnerExerciseCategory, refreshIcons });
+  document.querySelector(".view-tabs").style.setProperty("--view-count", String(document.querySelectorAll('.view-tabs [data-view-link]:not([hidden])').length));
   installListeners();
   const migrated = ensureDefaults();
   if (migrated) flushStateSave();
@@ -3882,6 +3895,7 @@ function makeExerciseEntry(exercise, date = state.activeDate) {
     name: getProgramExerciseName(exercise),
     setup: exercise.setup || "",
     note: "",
+    ...(exercise.muscleGroup ? { muscleGroup: exercise.muscleGroup } : {}),
     ...(Number.isFinite(Number(exercise.restSeconds)) ? { restSeconds: Number(exercise.restSeconds) } : {}),
     unilateral,
     isometric,
@@ -4289,7 +4303,9 @@ function getRecordedProgramExercises(workout, session) {
   return Object.entries(workout.exercises || {}).map(([id, entry]) => {
     const exercise = session?.exercises.find((item) => item.id === id);
     return { ...exercise, id, name: entry.name || exercise?.name || id,
-      setup: entry.setup ?? exercise?.setup ?? "", isometric: entry.isometric ?? exercise?.isometric };
+      setup: entry.setup ?? exercise?.setup ?? "", isometric: entry.isometric ?? exercise?.isometric,
+      muscleGroup: entry.muscleGroup ?? exercise?.muscleGroup,
+      kind: entry.kind || exercise?.kind || "strength", statsFallbackGroup: session?.group };
   });
 }
 
@@ -5093,7 +5109,7 @@ function getRecords(group = getChartGroup(), filter = getChartFilter(group), ran
 }
 
 function shouldRenderBoomingGroups(group, filter) {
-  return ["Upper", "Lower"].includes(group) && filter === "all";
+  return (USER_PROFILE ? ["Upper", "Lower"] : Object.keys(OWNER_MUSCLE_GROUPS)).includes(group) && filter === "all";
 }
 
 function getBoomingMuscleGroups(group, rangeDays = getStatsRangeDays()) {
@@ -5122,7 +5138,7 @@ function getStrengthRecords(group, filter, rangeDays = getStatsRangeDays()) {
   getStatsHistory(rangeDays).forEach((historyEntry) => {
     const session = getWorkoutSession(historyEntry.workout, historyEntry);
     const workout = historyEntry.workout;
-    if (!session || !workout || session.group !== group) return;
+    if (!session || !workout || (USER_PROFILE && session.group !== group)) return;
 
     getRecordedProgramExercises(workout, session)
       .filter((exercise) => matchesChartFilter(exercise, group, filter))
@@ -5219,6 +5235,7 @@ function getChartGroup() {
 }
 
 function getChartFilters(group) {
+  if (!USER_PROFILE && OWNER_MUSCLE_GROUPS[group]) return [{ value: "all", label: "All" }, ...OWNER_MUSCLE_GROUPS[group]];
   return CHART_FILTERS[group] || CHART_FILTERS.Upper;
 }
 
@@ -5284,11 +5301,12 @@ function getChartMetrics(group, filter = "all") {
   }
 
   const metricsByKey = new Map();
-  const catalog = sessions.filter((session) => session.group === group).flatMap((session) => session.exercises);
+  const catalog = sessions.filter((session) => !USER_PROFILE || session.group === group)
+    .flatMap((session) => session.exercises.map((exercise) => ({ ...exercise, statsFallbackGroup: session.group })));
   if (group === "Upper") catalog.push(...ARCHIVED_UPPER_EXERCISES);
   getSortedHistoryAsc().forEach((historyEntry) => {
     const session = getWorkoutSession(historyEntry.workout, historyEntry);
-    if (session?.group === group && historyEntry.workout) {
+    if (session && (!USER_PROFILE || session.group === group) && historyEntry.workout) {
       catalog.push(...getRecordedProgramExercises(historyEntry.workout, session));
     }
   });
@@ -5327,9 +5345,9 @@ function getTrendPoints(group, metric, filter = "all", rangeDays = getStatsRange
   if (metric === STRENGTH_INDEX_METRIC) return getStrengthIndexTrendPoints(group, filter, rangeDays);
 
   return getStatsHistoryAsc(rangeDays)
-    .filter((entry) => entry.sessionGroup === group && entry.workout)
+    .filter((entry) => (!USER_PROFILE || entry.sessionGroup === group) && entry.workout)
     .map((entry) => {
-      const measurement = getExerciseTrendMeasurement(entry, metric.replace("exercise:", ""));
+      const measurement = getExerciseTrendMeasurement(entry, metric.replace("exercise:", ""), group, filter);
       if (!measurement) return null;
       return {
         date: entry.date,
@@ -5382,7 +5400,7 @@ function getStrengthIndexTrendPoints(group, filter = "all", rangeDays = getStats
 function getStrengthIndexMeasurements(historyEntry, group, filter = "all") {
   const session = getWorkoutSession(historyEntry.workout, historyEntry);
   const workout = historyEntry.workout;
-  if (!session || !workout || session.group !== group) return [];
+  if (!session || !workout || (USER_PROFILE && session.group !== group)) return [];
 
   const measurements = new Map();
   getRecordedProgramExercises(workout, session).forEach((exercise) => {
@@ -5432,13 +5450,14 @@ function getBodyweightTrendPoints(rangeDays = getStatsRangeDays()) {
     }));
 }
 
-function getExerciseTrendMeasurement(historyEntry, exerciseKey) {
+function getExerciseTrendMeasurement(historyEntry, exerciseKey, group = null, filter = "all") {
   const session = getWorkoutSession(historyEntry.workout, historyEntry);
   const workout = historyEntry.workout;
   if (!session || !workout) return null;
 
   let best = null;
   getRecordedProgramExercises(workout, session).forEach((exercise) => {
+    if (group && !matchesChartFilter(exercise, group, filter)) return;
     const entry = workout.exercises?.[exercise.id];
     const name = entry?.name || getProgramExerciseName(exercise);
     if (getStrengthActivityKey(name, entry?.setup ?? exercise.setup) !== exerciseKey) return;
@@ -5511,7 +5530,32 @@ function parseRunIntensity(value) {
   return Math.max(0, Math.min(10, intensity));
 }
 
+function getOwnerExerciseCategory(exercise, legacyGroup) {
+  if (Object.values(OWNER_MUSCLE_GROUPS).some((items) => items.some((item) => item.value === exercise.muscleGroup))) return exercise.muscleGroup;
+  const name = normalizeExerciseName(exercise.name);
+  if (/(trap|shrug)/.test(name)) return "traps";
+  if (/(neck|nek)/.test(name)) return "neck";
+  if (/(wrist|grip|riser|squeeze|dead hang|side pressure|pols|onderarm|forearm)/.test(name)) return "grip";
+  if (/(oblique|crunch|abdominal|\babs\b|buik|core|plank|side bend|cable bend)/.test(name)) return "abs";
+  if (/(calve|calf|kuit)/.test(name)) return "calves";
+  if (/(squat|deadlift|\brdl\b|\bleg\b|sissy|hamstring|lunge|\bhip\b|glute|adduct|abduct|\bbeen\b|benen)/.test(name)) return "legs";
+  if (/(tricep|jm press|pushdown)/.test(name)) return "triceps";
+  if (/(bicep|curl)/.test(name)) return "biceps";
+  if (/(shoulder|laterial|lateral|side delt|y[- ]?raise|schouder|delt)/.test(name)) return "shoulders";
+  if (/(pull[- ]?up|pull ups|\brow\b|\blat\b|\blats\b|rug|roeien|optrek)/.test(name)) return "back";
+  if (/(bench|press|dips|fly|pec|chest|borst|bankdruk|flat smith)/.test(name)) return "push";
+  // Keep unclassified legacy exercises visible; new exercises choose a muscle group.
+  return legacyGroup === "Upper" ? "push" : legacyGroup === "Lower" ? "legs" : null;
+}
+
+function getExerciseStatsGroup(exercise, legacyGroup = exercise.statsFallbackGroup) {
+  if (USER_PROFILE) return legacyGroup;
+  const category = getOwnerExerciseCategory(exercise, legacyGroup);
+  return Object.keys(OWNER_MUSCLE_GROUPS).find((group) => OWNER_MUSCLE_GROUPS[group].some((item) => item.value === category));
+}
+
 function getExerciseCategory(exercise, group) {
+  if (!USER_PROFILE) return getOwnerExerciseCategory(exercise, exercise.statsFallbackGroup || group);
   const name = normalizeExerciseName(exercise.name);
   if (group === "Upper") {
     if (/(curl|bicep)/.test(name)) return "biceps";
@@ -5535,6 +5579,7 @@ function getExerciseCategory(exercise, group) {
 }
 
 function matchesChartFilter(exercise, group, filter = "all") {
+  if (!USER_PROFILE && ((exercise.kind || "strength") !== "strength" || getExerciseStatsGroup(exercise) !== group)) return false;
   return filter === "all" || getExerciseCategory(exercise, group) === filter;
 }
 
@@ -6284,7 +6329,7 @@ function syncViewFromHash() {
       section.classList.toggle("is-active", section.dataset.view === view);
     });
     document.querySelectorAll("[data-view-link]").forEach((link) => {
-      link.classList.toggle("is-active", link.dataset.viewLink === view || (view === "schema" && link.dataset.viewLink === "train"));
+      link.classList.toggle("is-active", link.dataset.viewLink === view);
     });
     requestAnimationFrame(scrollActiveViewTabIntoView);
     if (view === "stats" && els.chartCanvas) renderStats();

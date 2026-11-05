@@ -648,6 +648,13 @@ select {
   color: var(--text);
 }
 
+.group-control:has([data-chart-group="Accessories"]) {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.group-control:has([data-chart-group="Accessories"]) button { flex: 1 0 auto; }
+
 .filter-control::after {
   background: linear-gradient(90deg, rgba(5, 5, 5, 0), #050505);
 }

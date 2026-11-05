@@ -8,24 +8,24 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Schema Jochem">
   <title>Schema Jochem</title>
-  <link rel="manifest" href="manifest-jochem.webmanifest?v=208">
-  <link rel="icon" href="favicon.ico?v=208" type="image/x-icon" sizes="any">
-  <link rel="icon" href="favicon-32.png?v=208" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=208" sizes="180x180">
+  <link rel="manifest" href="manifest-jochem.webmanifest?v=209">
+  <link rel="icon" href="favicon.ico?v=209" type="image/x-icon" sizes="any">
+  <link rel="icon" href="favicon-32.png?v=209" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=209" sizes="180x180">
   <link rel="preload" href="fonts/kh-teka-regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=208">
-  <link rel="stylesheet" href="mono-preview.css?v=208">
-  <link rel="stylesheet" href="rehab.css?v=208">
-  <link rel="stylesheet" href="plan-editor.css?v=208">
+  <link rel="stylesheet" href="styles.css?v=209">
+  <link rel="stylesheet" href="mono-preview.css?v=209">
+  <link rel="stylesheet" href="rehab.css?v=209">
+  <link rel="stylesheet" href="plan-editor.css?v=209">
   <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js" defer></script>
-  <script src="firebase-config.js?v=208" defer></script>
-  <script src="profile-cloud.js?v=208" defer></script>
-  <script src="app-updates.js?v=208" defer></script>
-  <script src="rehab-plan.js?v=208" defer></script>
-  <script src="rehab.js?v=208" defer></script>
-  <script src="plan-model.js?v=208" defer></script>
-  <script src="plan-editor.js?v=208" defer></script>
-  <script src="app.js?v=208" defer></script>
+  <script src="firebase-config.js?v=209" defer></script>
+  <script src="profile-cloud.js?v=209" defer></script>
+  <script src="app-updates.js?v=209" defer></script>
+  <script src="rehab-plan.js?v=209" defer></script>
+  <script src="rehab.js?v=209" defer></script>
+  <script src="plan-model.js?v=209" defer></script>
+  <script src="plan-editor.js?v=209" defer></script>
+  <script src="app.js?v=209" defer></script>
 </head>
 <body>
   <section id="profile-access" class="profile-access" aria-labelledby="profile-access-title" hidden>
@@ -65,6 +65,10 @@
         <i data-lucide="chart-no-axes-combined"></i>
         <span>Stats</span>
       </a>
+      <a href="#schema" data-view-link="schema" data-schema-owner hidden>
+        <i data-lucide="pencil"></i>
+        <span>Bewerken</span>
+      </a>
       <a href="#rehab" data-view-link="rehab" data-rehab-owner hidden>
         <i data-lucide="activity"></i>
         <span>Rehab</span>
@@ -88,7 +92,6 @@
               <div class="session-title-block">
                 <h1 id="train-title"><span id="train-title-label"></span><span id="train-progress-count" class="title-progress"></span></h1>
                 <span id="train-time-estimate" class="session-time-estimate" hidden></span>
-                <a class="mini-button plan-open" href="#schema" data-schema-owner hidden><i data-lucide="pencil"></i><span>Schema bewerken</span></a>
               </div>
               <div class="date-field">
                 <input id="training-date" type="hidden">
@@ -131,6 +134,7 @@
             <div class="segment-control group-control" aria-label="Groep">
               <button type="button" data-action="chart-group" data-chart-group="Upper">Upper</button>
               <button type="button" data-action="chart-group" data-chart-group="Lower">Lower</button>
+              <button type="button" data-action="chart-group" data-chart-group="Accessories">Accessories</button>
               <button type="button" data-action="chart-group" data-chart-group="Running">Running</button>
               <button type="button" data-action="chart-group" data-chart-group="Gewicht">Gewicht</button>
             </div>
@@ -310,8 +314,8 @@
     </button>
   </div>
 
-  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=208" preload="none" muted loop playsinline aria-hidden="true"></audio>
-  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=208" preload="none" muted playsinline aria-hidden="true"></audio>
+  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=209" preload="none" muted loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=209" preload="none" muted playsinline aria-hidden="true"></audio>
 
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>
