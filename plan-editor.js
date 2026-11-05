@@ -41,7 +41,6 @@ window.PlanEditor = (() => {
         ${day.id === "overig" ? `<p class="record-meta">Overig blijft beschikbaar voor losse activiteiten. Hieronder bewerk je de snelkeuzes.</p>` : ""}
         <div class="exercise-list">${day.exercises.map((exercise, i) => renderExercise(exercise, i, day)).join("")}</div>
         <button class="mini-button plan-add-exercise" type="button" data-plan-action="add-exercise"${day.exercises.length >= 80 ? " disabled" : ""}><i data-lucide="plus"></i><span>Oefening toevoegen</span></button>
-        <datalist id="plan-suggestions">${suggestions().map((exercise) => `<option value="${esc(exercise.name)}">${esc(exercise.aliases || exercise.name)}</option>`).join("")}</datalist>
       </section></div>
     </form>`;
     options.refreshIcons();
@@ -90,7 +89,7 @@ window.PlanEditor = (() => {
       <header class="exercise-head"><span class="exercise-index">${String(index + 1).padStart(2, "0")}</span>
         <div class="exercise-title"><button class="activity-name-display" type="button" data-plan-action="toggle-exercise" aria-expanded="${isOpen}">${esc(exercise.name || "Naam invullen")}</button><span class="exercise-subtitle">${exercise.setCount} ${exercise.kind === "run" || exercise.kind === "cardio" ? "pogingen" : "sets"}</span></div>
         <button class="card-toggle" type="button" data-plan-action="toggle-exercise" aria-expanded="${isOpen}" aria-label="Bewerk ${esc(exercise.name || "oefening")}"><i data-lucide="chevron-${isOpen ? "up" : "down"}"></i></button></header>
-      ${isOpen ? `<div class="plan-exercise-fields"><div class="plan-add-fields"><label class="field"><span>Naam van de oefening</span><input class="cloud-input" data-plan-field="name" list="plan-suggestions" value="${esc(exercise.name)}" placeholder="Naam invullen" autocomplete="off" maxlength="120" required></label>
+      ${isOpen ? `<div class="plan-exercise-fields"><div class="plan-add-fields"><label class="field"><span>Naam van de oefening</span><input class="cloud-input" data-plan-field="name" value="${esc(exercise.name)}" placeholder="Naam invullen" autocomplete="off" maxlength="120" required></label>
         <label class="field plan-sets"><span>${exercise.kind === "run" || exercise.kind === "cardio" ? "Pogingen" : "Sets"}</span><input class="cloud-input" data-plan-field="setCount" type="number" min="1" max="30" step="1" value="${exercise.setCount}" required></label></div>
         ${(!exercise.kind || exercise.kind === "strength") ? `<label class="field plan-muscle-group"><span>Spiergroep in Stats</span><div class="plan-muscle-picker">
           <div class="plan-muscle-values" aria-hidden="true"><span class="plan-muscle-section">${esc(selection.group)}</span><span class="plan-muscle-name">${esc(selection.label)}</span></div>
