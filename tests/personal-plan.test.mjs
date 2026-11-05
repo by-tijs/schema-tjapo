@@ -241,10 +241,35 @@ test('legacy neck, traps and grip move to Accessories without rewriting logged d
   assert.equal(a.run('getTrendPoints("Accessories", makeExerciseMetricValue("Neck extentsions")).length'), 1);
   assert.equal(a.run('JSON.stringify(state.history) === beforeHistory'), true);
   assert.equal(a.run('getOwnerExerciseCategory({name:"Onbekend"})'), null);
-  for (const [name, category] of [['Db hamstring curls','legs'], ['Db wrist curls','grip'], ['Cable bends','abs'], ['Weighted pull ups','back'], ['Cuffed Laterial','shoulders']]) {
+  for (const [name, category] of [['Db hamstring curls','hamstrings'], ['Db wrist curls','grip'], ['Cable bends','abs'], ['Weighted pull ups','back'], ['Cuffed Laterial','shoulders']]) {
     assert.equal(a.run(`getOwnerExerciseCategory({name:${JSON.stringify(name)}})`), category);
   }
   const jochem = app({search:'?profiel=jochem'});
   assert.equal(jochem.run('CHART_GROUPS.includes("Accessories")'), false);
   assert.equal(jochem.run('getChartFilters("Lower").some(item => item.value === "neck")'), true);
+});
+
+test('Lower separates hamstrings from quads and glutes, including the former broad legs category', () => {
+  const a = app();
+  for (const name of ['Db hamstring curls','Seated leg curl','Stiff leg RDL','Romanian deadlift']) {
+    assert.equal(a.run(`getOwnerExerciseCategory({name:${JSON.stringify(name)},muscleGroup:'legs'})`), 'hamstrings');
+  }
+  for (const name of ['Squat','Leg extension','Hip thrust','Bulgarian split squat']) {
+    assert.equal(a.run(`getOwnerExerciseCategory({name:${JSON.stringify(name)},muscleGroup:'legs'})`), 'quads-glutes');
+  }
+  assert.equal(a.run('getOwnerExerciseCategory({name:"RDL",muscleGroup:"quads-glutes"})'), 'quads-glutes');
+  assert.equal(a.run('getOwnerExerciseCategory({name:"Eigen oefening",muscleGroup:"hamstrings"})'), 'hamstrings');
+  assert.deepEqual(a.json('getChartFilters("Lower").map(item => item.value)'), ['all','quads-glutes','hamstrings','calves']);
+  a.run(`var w = getWorkout('lower-a', today());
+    w.exercises['db-hamstring-curls'].muscleGroup = 'legs';
+    w.exercises['db-hamstring-curls'].sets[0] = {left:{weight:'20',reps:'8',rpe:'8'},right:{weight:'20',reps:'8',rpe:'8'}};
+    state.history = [{id:'legacy-hamstrings',sessionId:w.sessionId,sessionGroup:'Lower',date:w.date,workout:structuredClone(w)}];
+    historyCache.ref = null; var before = JSON.stringify(state.history);`);
+  assert.equal(a.run('getStrengthIndexTrendPoints("Lower", "hamstrings").length'), 1);
+  assert.equal(a.run('getStrengthIndexTrendPoints("Lower", "quads-glutes").length'), 0);
+  assert.equal(a.run('getStrengthRecords("Lower", "hamstrings")[0].name'), 'Db hamstring curls');
+  assert.equal(a.run('JSON.stringify(state.history) === before'), true);
+  a.run(`editPlan(plan => { plan.days.find(day => day.id === 'lower-a').exercises.find(e => e.id === 'db-hamstring-curls').muscleGroup = 'hamstrings'; });`);
+  const reopened = app({storage:a.storage});
+  assert.equal(reopened.run('sessions.find(day => day.id === "lower-a").exercises.find(e => e.id === "db-hamstring-curls").muscleGroup'), 'hamstrings');
 });

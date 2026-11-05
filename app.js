@@ -248,7 +248,7 @@ const OWNER_MUSCLE_GROUPS = {
     { value: "shoulders", label: "Schouders" }, { value: "biceps", label: "Biceps" },
     { value: "triceps", label: "Triceps" },
   ],
-  Lower: [{ value: "legs", label: "Benen" }, { value: "calves", label: "Kuiten" }],
+  Lower: [{ value: "quads-glutes", label: "Quads & glutes" }, { value: "hamstrings", label: "Hamstrings" }, { value: "calves", label: "Kuiten" }],
   Accessories: [
     { value: "neck", label: "Nek" }, { value: "traps", label: "Traps" },
     { value: "grip", label: "Onderarmen / grip" }, { value: "abs", label: "Buik" },
@@ -312,7 +312,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "209";
+const APP_VERSION = "210";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -505,6 +505,7 @@ function setProgramExerciseName(exerciseId, value) {
 }
 
 function init() {
+  window.AppStartup?.start({ profile: Boolean(USER_PROFILE) });
   if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   bindElements();
   configureLocalProfile();
@@ -520,6 +521,7 @@ function init() {
   window.AppUpdates?.init({ version: APP_VERSION, profile: USER_PROFILE?.name || "Tijs", save: flushStateSave });
   initCloudSync();
   refreshIcons();
+  if (!USER_PROFILE) window.AppStartup?.ready();
 }
 
 function captureProfileInvitation() {
@@ -931,7 +933,7 @@ function scrollActiveSessionIntoView() {
   const targetLeft = active.offsetLeft - ((rail.clientWidth - active.offsetWidth) / 2);
   rail.scrollTo({
     left: Math.max(0, targetLeft),
-    behavior: prefersReducedMotion ? "auto" : "smooth",
+    behavior: prefersReducedMotion || document.documentElement.classList.contains("app-booting") ? "auto" : "smooth",
   });
 }
 
@@ -3540,6 +3542,7 @@ function renderProfileAccount() {
   if (els.backupFallback) els.backupFallback.hidden = false;
   document.getElementById("profile-conflict").hidden = !account?.conflict;
   document.getElementById("profile-recovery").hidden = !localStorage.getItem(`${STORAGE_KEY}:recovery`);
+  if (loggedIn || !loading) window.AppStartup?.ready();
 }
 
 function downloadProfileRecovery() {
@@ -5538,14 +5541,15 @@ function getOwnerExerciseCategory(exercise, legacyGroup) {
   if (/(wrist|grip|riser|squeeze|dead hang|side pressure|pols|onderarm|forearm)/.test(name)) return "grip";
   if (/(oblique|crunch|abdominal|\babs\b|buik|core|plank|side bend|cable bend)/.test(name)) return "abs";
   if (/(calve|calf|kuit)/.test(name)) return "calves";
-  if (/(squat|deadlift|\brdl\b|\bleg\b|sissy|hamstring|lunge|\bhip\b|glute|adduct|abduct|\bbeen\b|benen)/.test(name)) return "legs";
+  if (/(hamstring|leg.*curl|been.*curl|\brdl\b|romanian|roemeens|stiff.*leg|good morning)/.test(name)) return "hamstrings";
+  if (/(squat|deadlift|\bleg\b|sissy|lunge|\bhip\b|glute|adduct|abduct|quad|\bbeen\b|benen)/.test(name)) return "quads-glutes";
   if (/(tricep|jm press|pushdown)/.test(name)) return "triceps";
   if (/(bicep|curl)/.test(name)) return "biceps";
   if (/(shoulder|laterial|lateral|side delt|y[- ]?raise|schouder|delt)/.test(name)) return "shoulders";
   if (/(pull[- ]?up|pull ups|\brow\b|\blat\b|\blats\b|rug|roeien|optrek)/.test(name)) return "back";
   if (/(bench|press|dips|fly|pec|chest|borst|bankdruk|flat smith)/.test(name)) return "push";
   // Keep unclassified legacy exercises visible; new exercises choose a muscle group.
-  return legacyGroup === "Upper" ? "push" : legacyGroup === "Lower" ? "legs" : null;
+  return exercise.muscleGroup === "legs" || legacyGroup === "Lower" ? "quads-glutes" : legacyGroup === "Upper" ? "push" : null;
 }
 
 function getExerciseStatsGroup(exercise, legacyGroup = exercise.statsFallbackGroup) {
@@ -6317,6 +6321,7 @@ function syncViewFromHash() {
   const view = availableViews.includes(requestedView) ? requestedView : "train";
   const previousView = getActiveViewName();
   const changedView = hasSyncedView && previousView !== view;
+  const editorTransition = view === "schema" || previousView === "schema";
   const openingRehab = view === "rehab" && (!hasSyncedView || previousView !== "rehab");
   if (view !== requestedView) {
     history.replaceState(null, "", "#train");
@@ -6324,7 +6329,11 @@ function syncViewFromHash() {
 
   const updateView = () => {
     if (changedView) resetPageScroll();
-    document.body.classList.toggle("is-editing-plan", view === "schema" && !USER_PROFILE);
+    const editing = view === "schema" && !USER_PROFILE;
+    document.body.classList.toggle("is-editing-plan", editing);
+    document.querySelector(".view-tabs").inert = editing;
+    const editorFooter = document.querySelector(".plan-footer");
+    if (editorFooter) editorFooter.inert = !editing;
     document.querySelectorAll("[data-view]").forEach((section) => {
       section.classList.toggle("is-active", section.dataset.view === view);
     });
@@ -6345,10 +6354,11 @@ function syncViewFromHash() {
 
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const canUseViewTransition = changedView
+    && !editorTransition
     && !reduceMotion
     && typeof document.startViewTransition === "function";
 
-  document.querySelectorAll(".view.is-view-entering").forEach((section) => section.classList.remove("is-view-entering"));
+  document.querySelectorAll(".view").forEach((section) => section.classList.remove("is-view-entering", "is-editor-entering"));
   if (canUseViewTransition) {
     const transition = document.startViewTransition(updateView);
     transition.finished.catch(() => {});
@@ -6357,8 +6367,9 @@ function syncViewFromHash() {
     if (changedView) requestAnimationFrame(resetPageScroll);
     if (changedView && !reduceMotion) {
       const activeView = document.querySelector(`[data-view="${view}"]`);
-      activeView?.classList.add("is-view-entering");
-      window.setTimeout(() => activeView?.classList.remove("is-view-entering"), 950);
+      const enteringClass = editorTransition ? "is-editor-entering" : "is-view-entering";
+      activeView?.classList.add(enteringClass);
+      window.setTimeout(() => activeView?.classList.remove(enteringClass), editorTransition ? 200 : 950);
     }
   }
   hasSyncedView = true;

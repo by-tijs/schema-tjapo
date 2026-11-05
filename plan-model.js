@@ -4,7 +4,7 @@ window.PersonalPlan = (() => {
   const clone = (value) => JSON.parse(JSON.stringify(value));
   const id = (prefix) => `${prefix}-${crypto.randomUUID()}`;
   const safeId = (value) => typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,100}$/.test(value);
-  const muscleGroups = ["push", "back", "shoulders", "traps", "biceps", "triceps", "legs", "calves", "neck", "grip", "abs"];
+  const muscleGroups = ["push", "back", "shoulders", "traps", "biceps", "triceps", "legs", "quads-glutes", "hamstrings", "calves", "neck", "grip", "abs"];
   const valid = (plan) => plan?.version === 1 && Array.isArray(plan.days) && plan.days.length > 0
     && (plan.order === undefined || (Array.isArray(plan.order) && plan.order.every(safeId)))
     && (plan.archivedDays === undefined || (Array.isArray(plan.archivedDays) && plan.archivedDays.every((day) => safeId(day?.id) && Array.isArray(day.exercises))))
