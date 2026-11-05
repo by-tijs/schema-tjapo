@@ -33,8 +33,7 @@ window.PlanEditor = (() => {
         <button class="session-chip" type="button" data-plan-action="add-day"${draft.days.length >= 60 ? " disabled" : ""}><strong><i data-lucide="plus"></i>Dag toevoegen</strong></button>
       </div></aside>
       <section class="training-panel" aria-label="Dag bewerken"><div class="plan-day-heading">
-        <label class="field plan-day-name"><span>Naam van de dag</span><input class="cloud-input" data-plan-field="day-name" list="plan-day-names" value="${esc(day.label)}" placeholder="Naam invullen" maxlength="80" required></label>
-        <datalist id="plan-day-names">${["Upper A", "Upper B", "Lower A", "Lower B", "Push", "Pull", "Legs", "Full body"].map((name) => `<option value="${name}"></option>`).join("")}</datalist>
+        <label class="field plan-day-name"><span>Naam van de dag</span><input class="cloud-input" data-plan-field="day-name" value="${esc(day.label)}" placeholder="Naam invullen" maxlength="80" autocomplete="off" required></label>
         <div class="plan-day-actions"><div class="plan-tools">${button("day-up", "arrow-left", "Dag naar links", index === 0 ? "disabled" : "")}${button("day-down", "arrow-right", "Dag naar rechts", index === draft.days.length - 1 ? "disabled" : "")}</div>
           <div class="plan-tools">${day.id !== "overig" ? button("copy-day", "copy", "Dag kopiëren", draft.days.length >= 60 ? "disabled" : "") + button("delete-day", "trash-2", "Dag verwijderen") : ""}</div></div></div>
         ${pendingDelete === "day" ? `<div class="plan-confirm"><p>${esc(day.label)} uit je schema verwijderen? Je trainingshistorie blijft bewaard.</p><button class="mini-button" type="button" data-plan-action="confirm-day-delete">Dag verwijderen</button><button class="mini-button" type="button" data-plan-action="keep">Behouden</button></div>` : ""}
