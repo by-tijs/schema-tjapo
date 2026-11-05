@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="nl" class="app-booting">
+<head>
+  <meta charset="utf-8">
+  <style>html,body{background:#050505}html.app-booting .app-shell,html.app-booting #profile-access{visibility:hidden}</style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Schema Joep">
+  <title>Schema Joep</title>
+  <link rel="manifest" href="manifest-joep.webmanifest?v=214">
+  <link rel="icon" href="favicon.ico?v=214" type="image/x-icon" sizes="any">
+  <link rel="icon" href="favicon-32.png?v=214" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=214" sizes="180x180">
+  <link rel="preload" href="fonts/kh-teka-regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="styles.css?v=214">
+  <link rel="stylesheet" href="mono-preview.css?v=214">
+  <link rel="stylesheet" href="rehab.css?v=214">
+  <link rel="stylesheet" href="plan-editor.css?v=214">
+  <script src="app-startup.js?v=214" defer></script>
+  <script src="vendor/lucide-schema-1.69.0.min.js" defer></script>
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js" crossorigin>
+  <script src="firebase-config.js?v=214" defer></script>
+  <script src="profile-cloud.js?v=214" defer></script>
+  <script src="app-updates.js?v=214" defer></script>
+  <script src="rehab-plan.js?v=214" defer></script>
+  <script src="rehab.js?v=214" defer></script>
+  <script src="plan-model.js?v=214" defer></script>
+  <script src="plan-editor.js?v=214" defer></script>
+  <script src="app.js?v=214" defer></script>
+</head>
+<body>
+  <noscript>Schakel JavaScript in om je schema te openen.</noscript>
+  <section id="profile-access" class="profile-access" aria-labelledby="profile-access-title" hidden>
+    <div class="profile-access-card">
+      <h1 id="profile-access-title">Schema openen…</h1>
+      <p id="profile-access-status" class="record-meta" role="status">Account laden…</p>
+      <form id="profile-login" class="profile-login" hidden>
+        <label class="field"><span>Gebruikersnaam</span>
+          <input id="profile-username" class="cloud-input" name="username" autocomplete="username" value="joep" readonly>
+        </label>
+        <label class="field"><span>Wachtwoord</span>
+          <input id="profile-password" class="cloud-input" name="password" type="password" autocomplete="current-password" required>
+        </label>
+        <label id="profile-confirm-field" class="field" hidden><span>Herhaal wachtwoord</span>
+          <input id="profile-confirm" class="cloud-input" name="confirm-password" type="password" autocomplete="new-password">
+        </label>
+        <button id="profile-submit" class="primary-button" type="submit" disabled>Inloggen</button>
+        <button id="profile-login-instead" class="mini-button" type="button" hidden>Ik heb al een wachtwoord</button>
+      </form>
+    </div>
+  </section>
+  <div class="app-shell">
+    <nav class="view-tabs" aria-label="Navigatie">
+      <a href="#train" data-view-link="train" class="is-active">
+        <i data-lucide="dumbbell"></i>
+        <span>Train</span>
+      </a>
+      <a href="#log" data-view-link="log">
+        <i data-lucide="history"></i>
+        <span>Log</span>
+      </a>
+      <a href="#weight" data-view-link="weight">
+        <i data-lucide="scale"></i>
+        <span>Gewicht</span>
+      </a>
+      <a href="#stats" data-view-link="stats">
+        <i data-lucide="chart-no-axes-combined"></i>
+        <span>Stats</span>
+      </a>
+      <a href="#schema" data-view-link="schema" data-plan-editor hidden>
+        <i data-lucide="pencil"></i>
+        <span>Bewerken</span>
+      </a>
+      <a href="#rehab" data-view-link="rehab" data-rehab-owner hidden>
+        <i data-lucide="activity"></i>
+        <span>Rehab</span>
+      </a>
+    </nav>
+    <footer class="plan-footer" data-plan-editor aria-label="Schema bewerken" hidden inert>
+      <div class="plan-footer-actions">
+        <button class="ghost-button" type="button" data-plan-action="cancel">Annuleren</button>
+        <button class="primary-button" type="submit" form="plan-editor-form"><i data-lucide="check"></i><span>Opslaan</span></button>
+      </div>
+    </footer>
+
+    <div id="app-update-banner" class="app-update-banner" role="status" hidden>
+      <span>Nieuwe versie beschikbaar</span>
+      <button class="mini-button" type="button" data-app-update>Bijwerken</button>
+    </div>
+
+    <main>
+      <section class="view is-active" data-view="train" aria-labelledby="train-title">
+        <div class="workbench">
+          <aside class="side-panel">
+            <div id="session-rail" class="session-rail" aria-label="Sessies"></div>
+          </aside>
+
+          <section class="training-panel">
+            <div class="session-heading">
+              <div class="session-title-block">
+                <h1 id="train-title"><span id="train-title-label"></span><span id="train-progress-count" class="title-progress"></span></h1>
+                <span id="train-time-estimate" class="session-time-estimate" hidden></span>
+              </div>
+              <div class="date-field">
+                <input id="training-date" type="hidden">
+                <button id="training-date-button" class="date-control" type="button" data-action="open-date-picker" data-date-context="train" aria-haspopup="dialog" aria-expanded="false">
+                  <span id="training-date-label"></span>
+                  <i data-lucide="calendar-days"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="exercise-list" class="exercise-list"></div>
+
+            <div class="finish-bar">
+              <div class="finish-actions">
+                <button class="reset-button" type="button" data-action="reset-current">
+                  <i data-lucide="rotate-ccw"></i>
+                  <span>Reset</span>
+                </button>
+                <button class="primary-button" type="button" data-action="complete-session">
+                  <i data-lucide="check"></i>
+                  <span>Afronden</span>
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" data-view="rehab" data-rehab-owner aria-labelledby="rehab-title" hidden></section>
+      <section class="view" data-view="schema" data-plan-editor aria-label="Schema bewerken" hidden></section>
+
+      <section class="view" data-view="log" aria-label="Training log">
+        <div id="history-list" class="history-list"></div>
+      </section>
+
+      <section class="view" data-view="stats" aria-label="Stats">
+        <div id="stats-grid" class="stats-grid"></div>
+        <section class="chart-panel" aria-label="Stats grafiek">
+          <div class="chart-controls">
+            <div class="segment-control group-control" aria-label="Groep">
+              <button type="button" data-action="chart-group" data-chart-group="Upper">Upper</button>
+              <button type="button" data-action="chart-group" data-chart-group="Lower">Lower</button>
+              <button type="button" data-action="chart-group" data-chart-group="Accessories">Accessories</button>
+              <button type="button" data-action="chart-group" data-chart-group="Running">Running</button>
+              <button type="button" data-action="chart-group" data-chart-group="Gewicht">Gewicht</button>
+            </div>
+            <div class="segment-control range-control" aria-label="Periode">
+              <button type="button" data-action="chart-range" data-range-days="30">30d</button>
+              <button type="button" data-action="chart-range" data-range-days="90">90d</button>
+              <button type="button" data-action="chart-range" data-range-days="365">365d</button>
+            </div>
+            <div id="chart-filter-control" class="filter-control" aria-label="Filter"></div>
+            <label class="field chart-metric-field">
+              <span>Metric</span>
+              <select id="e1rm-metric-select"></select>
+            </label>
+          </div>
+          <div class="chart-stage">
+            <canvas id="e1rm-chart" width="900" height="340" tabindex="0" aria-label="Trendgrafiek" aria-describedby="chart-hint"></canvas>
+            <div id="chart-crosshair" class="chart-crosshair" hidden aria-hidden="true"></div>
+            <div id="chart-marker" class="chart-marker" hidden aria-hidden="true"></div>
+            <div id="chart-tooltip" class="chart-tooltip" role="status" aria-live="polite" aria-atomic="true" hidden></div>
+            <div id="e1rm-empty" class="empty-state" hidden>Nog geen data voor deze keuze.</div>
+          </div>
+          <p id="chart-hint" class="chart-hint" hidden>Raak de grafiek aan en schuif voor details. Met een toetsenbord: gebruik de pijltjes.</p>
+          <div id="chart-readout" class="chart-readout"></div>
+        </section>
+        <div id="records-list" class="records-list"></div>
+        <details id="shared-plan-panel" class="chart-panel" data-owner-only hidden>
+          <summary class="record-title">Schema Joep</summary>
+          <div id="shared-plan-content" aria-live="polite"></div>
+          <button class="mini-button" type="button" data-action="refresh-shared-plan">Vernieuwen</button>
+        </details>
+        <section id="backup-panel" class="backup-panel chart-panel" aria-label="Sync en backup">
+          <div class="cloud-panel" aria-label="Cloud sync">
+            <div class="sync-heading">
+              <div class="record-title">Sync</div>
+              <div class="sync-heading-status">
+                <div id="cloud-status" class="record-meta">Firebase nog niet ingesteld.</div>
+                <div id="cloud-user-actions" class="cloud-user-actions" hidden>
+                  <button class="cloud-logout-button" type="button" data-action="cloud-logout">Uitloggen</button>
+                </div>
+              </div>
+            </div>
+            <form id="cloud-auth" class="cloud-auth">
+              <label class="field cloud-field">
+                <span>E-mail</span>
+                <input id="cloud-email" class="cloud-input" type="email" name="email" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false">
+              </label>
+              <label class="field cloud-field">
+                <span>Wachtwoord</span>
+                <input id="cloud-password" class="cloud-input" type="password" name="password" autocomplete="current-password">
+              </label>
+              <div class="cloud-auth-actions">
+                <button class="primary-button cloud-auth-submit" type="submit">Inloggen</button>
+              </div>
+            </form>
+          </div>
+          <div id="backup-fallback" class="backup-fallback">
+            <div class="data-actions">
+              <button class="mini-button" type="button" data-action="quick-export">
+                <i data-lucide="download"></i>
+                <span>Export</span>
+              </button>
+              <button class="mini-button" type="button" data-action="import-data">
+                <i data-lucide="upload"></i>
+                <span>Import</span>
+              </button>
+            </div>
+            <div id="storage-readout" class="storage-readout" hidden></div>
+          </div>
+          <div id="profile-conflict" class="profile-conflict" hidden>
+            <p>Er is ook op een ander apparaat voortgang gewijzigd. Van de versie die je vervangt blijft een herstelkopie beschikbaar.</p>
+            <button id="profile-use-cloud" class="mini-button" type="button">Online voortgang gebruiken</button>
+            <button id="profile-use-local" class="mini-button" type="button">Voortgang van dit apparaat gebruiken</button>
+          </div>
+          <button id="profile-recovery" class="mini-button" type="button" hidden>Herstelkopie downloaden</button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden>
+        </section>
+        <section class="sound-settings" aria-labelledby="sound-setting-title">
+          <div>
+            <div id="sound-setting-title" class="record-title">Geluiden</div>
+            <p id="sound-setting-description" class="record-meta">Geluid bij de rusttimer en het wisselen van kant.</p>
+          </div>
+          <button id="sound-toggle" class="sound-toggle" type="button" role="switch" aria-checked="false" aria-labelledby="sound-setting-title" aria-describedby="sound-setting-description" data-action="toggle-sound">
+            <span id="sound-toggle-label" aria-hidden="true">Uit</span>
+            <span class="sound-toggle-track" aria-hidden="true"></span>
+          </button>
+        </section>
+        <section class="app-update-settings" aria-label="App bijwerken">
+          <div id="app-update-status" class="record-meta" role="status"></div>
+          <button class="mini-button" type="button" data-app-update>App bijwerken</button>
+        </section>
+      </section>
+
+      <section class="view" data-view="weight" aria-label="Gewicht">
+        <div class="weight-view-content">
+          <section class="weight-panel" aria-label="Daggewicht">
+            <div class="weight-heading">
+              <div>
+                <span class="panel-label">Daggewicht</span>
+                <strong id="weight-value-readout" class="weight-value">--</strong>
+              </div>
+              <button id="weight-date-button" class="date-control" type="button" data-action="open-date-picker" data-date-context="weight" aria-haspopup="dialog" aria-expanded="false">
+                <span id="weight-date-label">04-08-2026</span>
+                <i data-lucide="calendar-days"></i>
+              </button>
+            </div>
+            <label class="weight-input">
+              <input id="daily-bodyweight" type="text" inputmode="decimal" data-field="daily-bodyweight" placeholder="kg" autocomplete="off" aria-label="Lichaamsgewicht in kilogram">
+              <span>kg</span>
+            </label>
+          </section>
+          <div id="weight-history" class="weight-history"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div id="confirm-modal" class="confirm-modal" hidden>
+    <button class="confirm-backdrop" type="button" data-action="cancel-confirm" aria-label="Sluiten"></button>
+    <section class="confirm-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+      <div>
+        <h2 id="confirm-title">Training resetten?</h2>
+        <p id="confirm-message">Je hebt al dingen ingevuld. Dit wist deze dag.</p>
+      </div>
+      <div class="confirm-actions">
+        <button class="ghost-button" type="button" data-action="cancel-confirm">Terug</button>
+        <button class="reset-button" type="button" data-action="confirm-pending">
+          <i data-lucide="trash-2"></i>
+          <span id="confirm-action-label">Verwijder</span>
+        </button>
+      </div>
+    </section>
+  </div>
+
+  <div id="date-picker" class="date-picker" hidden>
+    <button class="date-picker-backdrop" type="button" data-action="close-date-picker" aria-label="Sluiten"></button>
+    <section class="date-picker-card" role="dialog" aria-modal="true" aria-label="Datum kiezen">
+      <div class="date-picker-grabber" aria-hidden="true"></div>
+      <div class="date-picker-head">
+        <button class="mini-button icon-mini" type="button" data-action="calendar-prev-month" aria-label="Vorige maand">
+          <i data-lucide="chevron-left"></i>
+        </button>
+        <div>
+          <strong id="date-picker-month">juli 2026</strong>
+          <span id="date-picker-selected">12-07-2026</span>
+        </div>
+        <button class="mini-button icon-mini" type="button" data-action="calendar-next-month" aria-label="Volgende maand">
+          <i data-lucide="chevron-right"></i>
+        </button>
+      </div>
+      <div class="date-picker-quick" aria-label="Snelle datumkeuze">
+        <button type="button" data-action="calendar-relative" data-date-offset="-1">Gisteren</button>
+        <button type="button" data-action="calendar-relative" data-date-offset="0">Vandaag</button>
+        <button type="button" data-action="calendar-relative" data-date-offset="1">Morgen</button>
+      </div>
+      <div class="date-picker-calendar">
+        <div class="date-picker-weekdays" aria-hidden="true"></div>
+        <div id="date-picker-grid" class="date-picker-grid"></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="rest-timer" class="rest-timer" hidden aria-live="polite">
+    <button id="rest-timer-pause" class="rest-timer-control rest-timer-pause" type="button" data-action="rest-timer-toggle-pause" aria-label="Pauzeer rusttimer" title="Pauzeer rusttimer">
+      <i data-lucide="pause"></i>
+    </button>
+    <span class="rest-timer-divider" aria-hidden="true"></span>
+    <button class="rest-timer-adjust rest-timer-subtract" type="button" data-action="rest-timer-subtract" aria-label="Haal 30 seconden van de rusttimer af" title="-30 seconden">
+      <i data-lucide="minus"></i>
+      <span>30</span>
+    </button>
+    <div class="rest-timer-readout">
+      <strong id="rest-timer-value">5:00</strong>
+    </div>
+    <button class="rest-timer-adjust rest-timer-add" type="button" data-action="rest-timer-add" aria-label="Voeg 30 seconden toe" title="+30 seconden">
+      <i data-lucide="plus"></i>
+      <span>30</span>
+    </button>
+    <span class="rest-timer-divider" aria-hidden="true"></span>
+    <button class="rest-timer-control rest-timer-dismiss" type="button" data-action="rest-timer-dismiss" aria-label="Sluit rusttimer" title="Sluit rusttimer">
+      <i data-lucide="x"></i>
+    </button>
+  </div>
+
+  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=214" preload="none" muted loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=214" preload="none" muted playsinline aria-hidden="true"></audio>
+
+  <div id="rest-alarm" class="rest-alarm" hidden>
+    <div class="rest-alarm-backdrop" aria-hidden="true"></div>
+    <section class="rest-alarm-card" role="alertdialog" aria-modal="true" aria-labelledby="rest-alarm-title">
+      <div class="rest-alarm-heading">
+        <span class="rest-alarm-icon" aria-hidden="true"><i data-lucide="alarm-clock"></i></span>
+        <div>
+          <span class="panel-label">Rust klaar</span>
+          <h2 id="rest-alarm-title">Volgende set.</h2>
+        </div>
+      </div>
+      <button class="primary-button rest-alarm-action" type="button" data-action="rest-alarm-dismiss">
+        <i data-lucide="dumbbell"></i>
+        <span id="rest-alarm-action-label">Start set</span>
+      </button>
+    </section>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

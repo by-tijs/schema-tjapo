@@ -5,13 +5,12 @@ window.PersonalPlan = (() => {
   const id = (prefix) => `${prefix}-${crypto.randomUUID()}`;
   const safeId = (value) => typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,100}$/.test(value);
   const muscleGroups = ["push", "back", "shoulders", "traps", "biceps", "triceps", "legs", "quads-glutes", "hamstrings", "calves", "neck", "grip", "abs"];
-  const valid = (plan) => plan?.version === 1 && Array.isArray(plan.days) && plan.days.length > 0
+  const valid = (plan) => plan?.version === 1 && Array.isArray(plan.days)
     && (plan.order === undefined || (Array.isArray(plan.order) && plan.order.every(safeId)))
     && (plan.archivedDays === undefined || (Array.isArray(plan.archivedDays) && plan.archivedDays.every((day) => safeId(day?.id) && Array.isArray(day.exercises))))
     && (plan.nameAliases === undefined || (plan.nameAliases && typeof plan.nameAliases === "object" && !Array.isArray(plan.nameAliases)
       && Object.values(plan.nameAliases).every((name) => typeof name === "string")))
     && plan.days.length <= 60 && new Set(plan.days.map((day) => day.id)).size === plan.days.length
-    && plan.days.some((day) => day.id === "overig")
     && plan.days.every((day) => safeId(day.id) && typeof day.label === "string" && day.label.trim()
       && day.label.length <= 80 && ["Upper", "Lower", "Extra"].includes(day.group)
       && Array.isArray(day.exercises) && day.exercises.length <= 80
@@ -37,7 +36,8 @@ window.PersonalPlan = (() => {
 
   function addDay(plan, label = "Nieuwe dag", group = "Upper") {
     const day = { id: id("day"), label, group, cycle: true, exercises: [] };
-    plan.days.splice(Math.max(0, plan.days.findIndex((item) => item.id === "overig")), 0, day);
+    const extraIndex = plan.days.findIndex((item) => item.id === "overig");
+    plan.days.splice(extraIndex < 0 ? plan.days.length : extraIndex, 0, day);
     plan.order = [...cycle(plan).filter((key) => key !== day.id), day.id];
     return day;
   }

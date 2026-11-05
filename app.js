@@ -1,11 +1,13 @@
 "use strict";
 
 // A profile selects an account; Firebase authentication and rules grant access.
-const USER_PROFILE = location.pathname?.endsWith("/jochem.html")
-  || new URLSearchParams(location.search).get("profiel")?.trim().toLowerCase() === "jochem"
-  ? Object.freeze({ id: "jochem", name: "Jochem",
-      uid: "4XLfELa1AoeC4tcqBdW3e4Bz29o1", email: "jochem@schema-tjapo.invalid" })
-  : null;
+const PROFILES = Object.freeze({
+  jochem: Object.freeze({ id: "jochem", name: "Jochem", uid: "4XLfELa1AoeC4tcqBdW3e4Bz29o1", email: "jochem@schema-tjapo.invalid" }),
+  joep: Object.freeze({ id: "joep", name: "Joep", uid: "g5ZZPmjgWDOmZkyVYMrBaeBKb6p2", email: "joep@schema-tjapo.invalid" }),
+});
+const profileId = location.pathname?.match(/\/(jochem|joep)\.html$/)?.[1]
+  || new URLSearchParams(location.search).get("profiel")?.trim().toLowerCase();
+const USER_PROFILE = PROFILES[profileId] || null;
 const STORAGE_KEY = "herpakkingsseason.tracker.v1" + (USER_PROFILE ? `:user:${USER_PROFILE.uid}` : "");
 const REST_TIMER_COMPOUND_SECONDS = 5 * 60;
 const REST_TIMER_ISOLATION_SECONDS = 3 * 60;
@@ -172,7 +174,7 @@ const DEFAULT_SESSIONS = [
       compound("db-press", "DB press", 2),
     ],
   },
-].filter((session) => !USER_PROFILE || !["lower-c", "lower-d"].includes(session.id))
+].filter((session) => !USER_PROFILE || (USER_PROFILE.id === "jochem" && !["lower-c", "lower-d", "overig"].includes(session.id)))
   .map((session) => {
     if (!USER_PROFILE) return session;
     if (session.group === "Upper") {
@@ -204,7 +206,7 @@ const DEFAULT_CYCLE_ORDER = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-
   .filter((id) => DEFAULT_SESSIONS.some((session) => session.id === id));
 let sessions = DEFAULT_SESSIONS;
 let cycleOrder = DEFAULT_CYCLE_ORDER;
-const CHART_GROUPS = USER_PROFILE ? ["Upper", "Lower", "Running", "Gewicht"] : ["Upper", "Lower", "Accessories", "Running", "Gewicht"];
+const CHART_GROUPS = ["Upper", "Lower", "Accessories", "Running", "Gewicht"];
 // Keep the retired press selectable in Tijs' Stats without renaming its old data.
 const ARCHIVED_UPPER_EXERCISES = USER_PROFILE ? []
   : [unilateral("single-cable-press", "Single cable press", 2, "-22")];
@@ -312,7 +314,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "213";
+const APP_VERSION = "214";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -473,7 +475,7 @@ function setProgramExerciseName(exerciseId, value) {
   const nextName = String(value || "").trim();
   state.exerciseNames ||= {};
 
-  if (!USER_PROFILE && state.personalPlan) {
+  if (state.personalPlan) {
     if (!nextName) return;
     const canonical = getCanonicalPlanName(previousName);
     if (normalizeExerciseName(nextName) !== canonical) {
@@ -510,7 +512,7 @@ function init() {
   bindElements();
   configureLocalProfile();
   window.Rehab?.mount({ enabled: !USER_PROFILE, getState: () => state, save: saveState, flush: flushStateSave, refreshIcons, notify: showToast });
-  window.PlanEditor?.mount({ enabled: !USER_PROFILE, getPlan: getPersonalPlan, activeDay: () => state.activeSessionId,
+  window.PlanEditor?.mount({ enabled: true, getPlan: getPersonalPlan, activeDay: () => state.activeSessionId,
     commit: commitPersonalPlan, suggestions: getPlanSuggestions, muscleGroups: OWNER_MUSCLE_GROUPS, category: getOwnerExerciseCategory, refreshIcons });
   document.querySelector(".view-tabs").style.setProperty("--view-count", String(document.querySelectorAll('.view-tabs [data-view-link]:not([hidden])').length));
   installListeners();
@@ -528,24 +530,26 @@ function captureProfileInvitation() {
   if (!USER_PROFILE) return;
   const token = new URLSearchParams(location.hash.slice(1)).get("activate");
   if (token && /^[A-Za-z0-9_-]{24,128}$/.test(token)) {
-    sessionStorage.setItem("schema-tjapo:jochem:activation", token);
+    sessionStorage.setItem(`schema-tjapo:${USER_PROFILE.id}:activation`, token);
     history.replaceState(null, "", `${location.pathname}${location.search}#train`);
     if (profileAccount) {
       profileAccount.invitation = token;
       profileAccount.notify("Kies een wachtwoord voor je account.");
     }
   }
-  profileInvitation = sessionStorage.getItem("schema-tjapo:jochem:activation") || "";
+  profileInvitation = sessionStorage.getItem(`schema-tjapo:${USER_PROFILE.id}:activation`) || "";
 }
 
 function configureLocalProfile() {
   if (!USER_PROFILE) return;
+  document.querySelectorAll("[data-owner-only]").forEach((element) => element.remove());
   document.title = `Schema ${USER_PROFILE.name}`;
   document.querySelector('meta[name="apple-mobile-web-app-title"]')?.setAttribute("content", `Schema ${USER_PROFILE.name}`);
   document.querySelector('link[rel="manifest"]')?.setAttribute("href", `manifest-${USER_PROFILE.id}.webmanifest?v=${APP_VERSION}`);
   document.querySelectorAll("[data-chart-group]").forEach((button) => {
     if (!CHART_GROUPS.includes(button.dataset.chartGroup)) button.remove();
   });
+  document.getElementById("profile-username").value = USER_PROFILE.id;
   captureProfileInvitation();
   document.querySelector(".app-shell").hidden = true;
   document.getElementById("profile-access").hidden = false;
@@ -559,7 +563,7 @@ function configureLocalProfile() {
   document.getElementById("profile-recovery").addEventListener("click", downloadProfileRecovery);
   document.getElementById("profile-login-instead").addEventListener("click", () => {
     profileInvitation = "";
-    sessionStorage.removeItem("schema-tjapo:jochem:activation");
+    sessionStorage.removeItem(`schema-tjapo:${USER_PROFILE.id}:activation`);
     if (profileAccount) { profileAccount.invitation = ""; profileAccount.notify("Log in met je eigen wachtwoord."); }
   });
   renderProfileAccount();
@@ -684,6 +688,9 @@ function installListeners() {
 
   els.importFile?.addEventListener("change", importData);
   els.cloudAuth?.addEventListener("submit", handleCloudAuthSubmit);
+  document.getElementById("shared-plan-panel")?.addEventListener("toggle", (event) => {
+    if (event.target.open) renderSharedPlan();
+  });
 }
 
 function ensureDefaults() {
@@ -714,7 +721,7 @@ function ensureDefaults() {
     changed = true;
   }
   if (!sessions.some((day) => day.id === state.activeSessionId)
-    && !workoutHasMeaningfulData(state.workouts?.[workoutKey(state.activeSessionId, state.activeDate)])) state.activeSessionId = getNextSession().id;
+    && !workoutHasMeaningfulData(state.workouts?.[workoutKey(state.activeSessionId, state.activeDate)])) state.activeSessionId = getNextSession()?.id || null;
   if (!Number.isInteger(state.cycleIndex)) state.cycleIndex = 0;
   if (state.cycleIndex < 0 || state.cycleIndex >= cycleOrder.length) state.cycleIndex = 0;
   state.cycleCompleted = Array.isArray(state.cycleCompleted)
@@ -903,6 +910,10 @@ function renderSessionOptions() {
 
 function renderSessionRail() {
   const active = getTrainingSession();
+  if (!sessions.length && !active) {
+    els.sessionRail.innerHTML = '<button class="session-chip" type="button" data-action="edit-schema"><strong><i data-lucide="plus"></i>Dag toevoegen</strong></button>';
+    return;
+  }
   const visibleSessions = active && !sessions.some((day) => day.id === active.id) ? [...sessions, active] : sessions;
   const sessionButtons = visibleSessions
     .map((session) => {
@@ -1300,6 +1311,14 @@ function handleDatePickerClick(event) {
 
 function renderTraining() {
   const session = getTrainingSession();
+  const panel = els.exerciseList.closest(".training-panel");
+  panel.hidden = !session;
+  if (!session) {
+    els.exerciseList.innerHTML = "";
+    els.trainTitleLabel.textContent = "";
+    els.trainProgressCount.textContent = "";
+    return;
+  }
   state.activeSessionId = session.id;
   if (els.sessionSelect) els.sessionSelect.value = session.id;
   renderDateControl();
@@ -1332,6 +1351,7 @@ function renderTraining() {
     ${programCards}
     ${customCards}
   `;
+  panel.querySelector(".finish-bar").hidden = !session.exercises.length && session.id !== "overig";
   resizeNoteTextareas(els.exerciseList);
 }
 
@@ -2048,6 +2068,8 @@ function handleClick(event) {
 
 function runAction(trigger) {
   const action = trigger.dataset.action;
+  if (action === "refresh-shared-plan") { renderSharedPlan(); return; }
+  if (action === "edit-schema") { location.hash = "schema"; return; }
   if (action === "toggle-sound") toggleSound();
   if (action === "select-session") selectSession(trigger.dataset.sessionId);
   if (action === "toggle-card") toggleExerciseCard(trigger);
@@ -3491,6 +3513,10 @@ async function initProfileAccount() {
     legacyKey: `herpakkingsseason.tracker.v1:profile:${USER_PROFILE.id}`,
     invitation: profileInvitation,
     getState: () => state,
+    getSharedPlan: USER_PROFILE.id === "joep" ? (snapshot) => {
+      const plan = window.PersonalPlan.fromState(snapshot, DEFAULT_SESSIONS, DEFAULT_CYCLE_ORDER);
+      return { version: 1, days: plan.days.filter((day) => day.id !== "overig"), order: window.PersonalPlan.cycle(plan) };
+    } : null,
     hasData: (candidate) => stateHasMeaningfulData(candidate)
       || parseNumber(candidate?.bodyweight) > 0
       || Object.keys(candidate?.exerciseNames || {}).length > 0,
@@ -3536,7 +3562,7 @@ function renderProfileAccount() {
   const submit = document.getElementById("profile-submit");
   submit.textContent = activating ? "Account activeren" : "Inloggen";
   submit.disabled = !account?.auth || Boolean(account.busy) || Boolean(account?.authenticated && !account.ready);
-  if (els.cloudStatus) els.cloudStatus.textContent = `jochem · ${status}`;
+  if (els.cloudStatus) els.cloudStatus.textContent = `${USER_PROFILE.id} · ${status}`;
   if (els.cloudAuth) els.cloudAuth.hidden = true;
   if (els.cloudUserActions) els.cloudUserActions.hidden = !loggedIn;
   if (els.backupFallback) els.backupFallback.hidden = false;
@@ -3551,7 +3577,7 @@ function downloadProfileRecovery() {
   const url = URL.createObjectURL(new Blob([backup], { type: "application/json" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = `schema-jochem-herstel-${today()}.json`;
+  link.download = `schema-${USER_PROFILE.id}-herstel-${today()}.json`;
   document.body.append(link);
   link.click();
   link.remove();
@@ -3624,6 +3650,11 @@ function renderCloudSync() {
   if (USER_PROFILE) { renderProfileAccount(); return; }
   if (!els.cloudStatus) return;
   const syncActive = Boolean(cloudSync.available && cloudSync.ready && cloudSync.user);
+  const sharedPanel = document.getElementById("shared-plan-panel");
+  if (sharedPanel) {
+    sharedPanel.hidden = !syncActive;
+    if (!syncActive) { sharedPanel.open = false; document.getElementById("shared-plan-content").replaceChildren(); }
+  }
   const syncing = /laden|check|inloggen|maken/i.test(cloudSync.status);
   const failed = /mislukt/i.test(cloudSync.status);
   const cloudProtected = syncActive && !failed;
@@ -3641,6 +3672,31 @@ function renderCloudSync() {
   }
   if (els.cloudUserActions) {
     els.cloudUserActions.hidden = !configured || !cloudSync.user;
+  }
+}
+
+async function renderSharedPlan() {
+  const user = cloudSync.user;
+  const content = document.getElementById("shared-plan-content");
+  if (USER_PROFILE || !content || user?.uid !== "DYdNsg9kvTQ1DqQaTJK0HjUUPeD2") return;
+  content.textContent = "Schema ophalen…";
+  try {
+    const api = cloudSync.modules.firestoreMod;
+    const result = await api.getDocFromServer(api.doc(cloudSync.db, "sharedPlans", PROFILES.joep.uid));
+    if (cloudSync.user?.uid !== user.uid) return;
+    const data = result.exists() ? result.data() : null;
+    const plan = data?.plan;
+    if (!plan || !window.PersonalPlan.valid(plan)) {
+      content.textContent = "Joep heeft nog geen schema opgeslagen.";
+      return;
+    }
+    content.innerHTML = plan.days.length ? plan.days.map((day) => `<section class="shared-plan-day">
+      <h3 class="record-title">${escapeHtml(day.label)}</h3>
+      ${day.exercises.map((exercise) => `<div class="shared-plan-exercise"><span>${escapeHtml(exercise.name)}</span><span class="record-meta">${exercise.setCount} sets</span></div>`).join("")}
+    </section>`).join("") : '<p class="record-meta">Nog geen dagen.</p>';
+    if (data.updatedAt) content.insertAdjacentHTML("beforeend", `<p class="record-meta">Opgeslagen ${escapeHtml(formatDateTimeShort(data.updatedAt))}</p>`);
+  } catch {
+    if (cloudSync.user?.uid === user.uid) content.textContent = "Schema ophalen lukt nu niet. Probeer opnieuw.";
   }
 }
 
@@ -3806,7 +3862,7 @@ function compareIsoDates(a, b) {
 }
 
 function stateHasMeaningfulData(candidate) {
-  if (!USER_PROFILE && window.PersonalPlan?.valid(candidate?.personalPlan)) return true;
+  if (window.PersonalPlan?.valid(candidate?.personalPlan)) return true;
   if (window.Rehab?.hasData(candidate)) return true;
   if (Array.isArray(candidate?.history) && candidate.history.length > 0) return true;
   if (Array.isArray(candidate?.cycleCompleted) && candidate.cycleCompleted.length > 0) return true;
@@ -3847,6 +3903,7 @@ function getActiveWorkout() {
 
 function getWorkout(sessionId, date) {
   const session = findSession(sessionId) || getNextSession();
+  if (!session) return null;
   const key = workoutKey(session.id, date);
   if (!state.workouts[key]) {
     state.workouts[key] = makeWorkout(session, date);
@@ -3869,7 +3926,7 @@ function makeWorkout(session, date) {
     exercises,
     customItems: [],
   };
-  if (!USER_PROFILE && state.personalPlan && window.PersonalPlan) workout.sessionSnapshot = window.PersonalPlan.snapshot(session, workout);
+  if (state.personalPlan && window.PersonalPlan) workout.sessionSnapshot = window.PersonalPlan.snapshot(session, workout);
   return workout;
 }
 
@@ -4151,7 +4208,6 @@ function getStrengthActivityKey(name, entryOrSetup = "") {
 
 function getCanonicalPlanName(name) {
   let key = normalizeExerciseName(name);
-  if (USER_PROFILE) return key;
   const aliases = state.personalPlan?.nameAliases || {};
   const seen = new Set();
   while (typeof aliases[key] === "string" && !seen.has(key)) { seen.add(key); key = aliases[key]; }
@@ -5112,7 +5168,7 @@ function getRecords(group = getChartGroup(), filter = getChartFilter(group), ran
 }
 
 function shouldRenderBoomingGroups(group, filter) {
-  return (USER_PROFILE ? ["Upper", "Lower"] : Object.keys(OWNER_MUSCLE_GROUPS)).includes(group) && filter === "all";
+  return Object.keys(OWNER_MUSCLE_GROUPS).includes(group) && filter === "all";
 }
 
 function getBoomingMuscleGroups(group, rangeDays = getStatsRangeDays()) {
@@ -5141,7 +5197,7 @@ function getStrengthRecords(group, filter, rangeDays = getStatsRangeDays()) {
   getStatsHistory(rangeDays).forEach((historyEntry) => {
     const session = getWorkoutSession(historyEntry.workout, historyEntry);
     const workout = historyEntry.workout;
-    if (!session || !workout || (USER_PROFILE && session.group !== group)) return;
+    if (!session || !workout) return;
 
     getRecordedProgramExercises(workout, session)
       .filter((exercise) => matchesChartFilter(exercise, group, filter))
@@ -5238,7 +5294,7 @@ function getChartGroup() {
 }
 
 function getChartFilters(group) {
-  if (!USER_PROFILE && OWNER_MUSCLE_GROUPS[group]) return [{ value: "all", label: "All" }, ...OWNER_MUSCLE_GROUPS[group]];
+  if (OWNER_MUSCLE_GROUPS[group]) return [{ value: "all", label: "All" }, ...OWNER_MUSCLE_GROUPS[group]];
   return CHART_FILTERS[group] || CHART_FILTERS.Upper;
 }
 
@@ -5304,12 +5360,12 @@ function getChartMetrics(group, filter = "all") {
   }
 
   const metricsByKey = new Map();
-  const catalog = sessions.filter((session) => !USER_PROFILE || session.group === group)
+  const catalog = sessions
     .flatMap((session) => session.exercises.map((exercise) => ({ ...exercise, statsFallbackGroup: session.group })));
   if (group === "Upper") catalog.push(...ARCHIVED_UPPER_EXERCISES);
   getSortedHistoryAsc().forEach((historyEntry) => {
     const session = getWorkoutSession(historyEntry.workout, historyEntry);
-    if (session && (!USER_PROFILE || session.group === group) && historyEntry.workout) {
+    if (session && historyEntry.workout) {
       catalog.push(...getRecordedProgramExercises(historyEntry.workout, session));
     }
   });
@@ -5348,7 +5404,7 @@ function getTrendPoints(group, metric, filter = "all", rangeDays = getStatsRange
   if (metric === STRENGTH_INDEX_METRIC) return getStrengthIndexTrendPoints(group, filter, rangeDays);
 
   return getStatsHistoryAsc(rangeDays)
-    .filter((entry) => (!USER_PROFILE || entry.sessionGroup === group) && entry.workout)
+    .filter((entry) => entry.workout)
     .map((entry) => {
       const measurement = getExerciseTrendMeasurement(entry, metric.replace("exercise:", ""), group, filter);
       if (!measurement) return null;
@@ -5403,7 +5459,7 @@ function getStrengthIndexTrendPoints(group, filter = "all", rangeDays = getStats
 function getStrengthIndexMeasurements(historyEntry, group, filter = "all") {
   const session = getWorkoutSession(historyEntry.workout, historyEntry);
   const workout = historyEntry.workout;
-  if (!session || !workout || (USER_PROFILE && session.group !== group)) return [];
+  if (!session || !workout) return [];
 
   const measurements = new Map();
   getRecordedProgramExercises(workout, session).forEach((exercise) => {
@@ -5553,37 +5609,16 @@ function getOwnerExerciseCategory(exercise, legacyGroup) {
 }
 
 function getExerciseStatsGroup(exercise, legacyGroup = exercise.statsFallbackGroup) {
-  if (USER_PROFILE) return legacyGroup;
   const category = getOwnerExerciseCategory(exercise, legacyGroup);
   return Object.keys(OWNER_MUSCLE_GROUPS).find((group) => OWNER_MUSCLE_GROUPS[group].some((item) => item.value === category));
 }
 
 function getExerciseCategory(exercise, group) {
-  if (!USER_PROFILE) return getOwnerExerciseCategory(exercise, exercise.statsFallbackGroup || group);
-  const name = normalizeExerciseName(exercise.name);
-  if (group === "Upper") {
-    if (/(curl|bicep)/.test(name)) return "biceps";
-    if (/(jm press|pushdown|tricep)/.test(name)) return "triceps";
-    if (/(pull up|pull ups|row|lat prayer)/.test(name)) return "back";
-    if (/trap/.test(name)) return "traps";
-    if (/(shoulder press|laterial|lateral|side delt|y-raise|y-raises)/.test(name)) return "shoulders";
-    if (/(bench|press|dips)/.test(name)) return "push";
-    return "push";
-  }
-
-  if (group === "Lower") {
-    if (/(calve|calf)/.test(name)) return "calves";
-    if (/(neck|trap)/.test(name)) return "neck";
-    if (/(wrist|grip|riser|squeeze|dead hang|side pressure)/.test(name)) return "grip";
-    if (/(oblique|crunch|bend)/.test(name)) return "abs";
-    return "legs";
-  }
-
-  return "all";
+  return getOwnerExerciseCategory(exercise, exercise.statsFallbackGroup || group);
 }
 
 function matchesChartFilter(exercise, group, filter = "all") {
-  if (!USER_PROFILE && ((exercise.kind || "strength") !== "strength" || getExerciseStatsGroup(exercise) !== group)) return false;
+  if ((exercise.kind || "strength") !== "strength" || getExerciseStatsGroup(exercise) !== group) return false;
   return filter === "all" || getExerciseCategory(exercise, group) === filter;
 }
 
@@ -6219,13 +6254,13 @@ function isCycleSessionComplete(sessionId) {
 
 function findSession(sessionId) {
   return sessions.find((session) => session.id === sessionId)
-    || (!USER_PROFILE && state.personalPlan?.archivedDays?.find((session) => session.id === sessionId));
+    || (state.personalPlan?.archivedDays?.find((session) => session.id === sessionId));
 }
 
 function getWorkoutSession(workout, historyEntry = null) {
-  if (!USER_PROFILE && workout?.sessionSnapshot) return workout.sessionSnapshot;
+  if (workout?.sessionSnapshot) return workout.sessionSnapshot;
   const current = findSession(workout?.sessionId || historyEntry?.sessionId);
-  if (current || USER_PROFILE || !historyEntry) return current;
+  if (current || !historyEntry) return current;
   return { id: historyEntry.sessionId, label: historyEntry.sessionLabel, group: historyEntry.sessionGroup,
     exercises: Object.entries(workout?.exercises || {}).map(([id, entry]) => ({ ...entry, id, frozenName: true })) };
 }
@@ -6236,21 +6271,25 @@ function getTrainingSession() {
 }
 
 function getPersonalPlan() {
-  return window.PersonalPlan.fromState(state, DEFAULT_SESSIONS, DEFAULT_CYCLE_ORDER);
+  const plan = window.PersonalPlan.fromState(state, DEFAULT_SESSIONS, DEFAULT_CYCLE_ORDER);
+  if (USER_PROFILE) {
+    plan.days = plan.days.filter((day) => day.id !== "overig");
+    plan.order = window.PersonalPlan.cycle(plan);
+  }
+  return plan;
 }
 
 function syncPersonalPlan() {
-  if (USER_PROFILE || !window.PersonalPlan?.valid(state.personalPlan)) {
+  if (!window.PersonalPlan?.valid(state.personalPlan)) {
     sessions = DEFAULT_SESSIONS;
     cycleOrder = DEFAULT_CYCLE_ORDER;
     return;
   }
-  sessions = state.personalPlan.days;
-  cycleOrder = window.PersonalPlan.cycle(state.personalPlan);
+  sessions = USER_PROFILE ? state.personalPlan.days.filter((day) => day.id !== "overig") : state.personalPlan.days;
+  cycleOrder = window.PersonalPlan.cycle(state.personalPlan).filter((id) => sessions.some((day) => day.id === id));
 }
 
 function commitPersonalPlan(plan, baseline) {
-  if (USER_PROFILE) throw new Error("Schema bewerken is alleen beschikbaar voor Tijs.");
   if (JSON.stringify(getPersonalPlan()) !== baseline) throw new Error("Je schema is intussen gewijzigd. Annuleer en open Schema bewerken opnieuw om de nieuwste versie te gebruiken.");
   if (!window.PersonalPlan.valid(plan)) throw new Error("Controleer de namen en het aantal sets in je schema.");
   const oldPlan = getPersonalPlan();
@@ -6279,12 +6318,13 @@ function commitPersonalPlan(plan, baseline) {
   plan.archivedDays = knownDays.filter((day, index, list) => !plan.days.some((item) => item.id === day.id)
     && list.findIndex((item) => item.id === day.id) === index);
   state.personalPlan = plan;
+  state.planUpdatedAt = new Date().toISOString();
   state.exerciseNames = {};
   syncPersonalPlan();
   state.cycleCompleted = (state.cycleCompleted || []).filter((id) => cycleOrder.includes(id));
   state.cycleIndex = getFirstOpenCycleIndex();
   const current = state.workouts[workoutKey(state.activeSessionId, state.activeDate)];
-  if (!sessions.some((day) => day.id === state.activeSessionId) && !current) state.activeSessionId = getNextSession().id;
+  if (!sessions.some((day) => day.id === state.activeSessionId) && !current) state.activeSessionId = getNextSession()?.id || null;
   historyCache.ref = null;
   collapseExerciseCards();
   saveState(true);
@@ -6329,7 +6369,7 @@ function syncViewFromHash() {
 
   const updateView = () => {
     if (changedView) resetPageScroll();
-    const editing = view === "schema" && !USER_PROFILE;
+    const editing = view === "schema";
     document.body.classList.toggle("is-editing-plan", editing);
     document.querySelector(".view-tabs").inert = editing;
     const editorFooter = document.querySelector(".plan-footer");
@@ -6348,7 +6388,7 @@ function syncViewFromHash() {
       if (openingRehab) window.Rehab?.open();
       else window.Rehab?.render();
     }
-    if (view === "schema" && !USER_PROFILE) window.PlanEditor?.open();
+    if (view === "schema") window.PlanEditor?.open();
     requestAnimationFrame(() => updateSlidingIndicators());
   };
 

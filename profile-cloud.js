@@ -22,10 +22,7 @@ class ProfileAccount {
   notify(status) { if (status) this.status = status; this.onStatus(this); }
   async init(config, version) {
     try {
-      // Start Firestore in parallel, but do not make session restoration wait for it.
-      this.databaseReady = import(`https://www.gstatic.com/firebasejs/${version}/firebase-firestore.js`)
-        .then((db) => { this.dbApi = db; })
-        .catch((error) => { this.databaseError = error; });
+      this.sdkVersion = version;
       const [app, auth] = await Promise.all([
         import(`https://www.gstatic.com/firebasejs/${version}/firebase-app.js`),
         import(`https://www.gstatic.com/firebasejs/${version}/firebase-auth.js`),
@@ -43,7 +40,7 @@ class ProfileAccount {
         if (document.visibilityState === "visible") this.sync();
       });
       this.retryTimer = setInterval(() => {
-        if (this.authenticated && this.meta.pending && !this.conflict) this.sync();
+        if (this.authenticated && (this.meta.pending || !this.ready) && !this.conflict) this.sync();
       }, 30000);
     } catch {
       this.initializing = false;
@@ -74,6 +71,10 @@ class ProfileAccount {
     const cached = this.readJson(this.key);
     const legacy = !cached && this.readJson(this.legacyKey);
     const initial = cached || legacy || {};
+    // An initial empty render is cached too; it must not become an offline-ready
+    // account on reload until the first server read has actually succeeded.
+    this.meta.awaitingInitialSync = this.meta.awaitingInitialSync || !(cached || legacy);
+    this.saveMeta();
     if (legacy && this.hasData(legacy)) {
       this.meta.pending = true;
       this.saveMeta();
@@ -81,20 +82,20 @@ class ProfileAccount {
     this.onLoad(initial);
     // A verified returning user can start from their own cache immediately.
     // Fresh devices still wait for the initial cloud state before allowing edits.
-    this.ready = Boolean(cached || legacy);
+    this.ready = Boolean(cached || legacy) && !this.meta.awaitingInitialSync;
     this.notify("Voortgang ophalen…");
     // A previous session may still be finishing a request; its epoch prevents it applying data.
     if (this.inFlight) await this.inFlight;
     if (epoch !== this.epoch) return;
-    await this.sync();
+    const synced = await this.sync();
     if (epoch !== this.epoch) return;
-    this.ready = true;
+    this.ready ||= synced;
     this.notify();
   }
   async submit(username, password, confirmation) {
     if (this.busy || !this.auth) return;
     if (username.trim().toLowerCase() !== this.profile.id) {
-      this.notify("Gebruik gebruikersnaam jochem."); return;
+      this.notify(`Gebruik gebruikersnaam ${this.profile.id}.`); return;
     }
     if (this.invitation && (password.length < 12 || password !== confirmation)) {
       this.notify(password.length < 12 ? "Kies een wachtwoord van minimaal 12 tekens." : "De wachtwoorden komen niet overeen.");
@@ -109,7 +110,7 @@ class ProfileAccount {
         if (result.user.uid !== this.profile.uid) throw new Error("wrong-account");
         await this.authApi.updatePassword(result.user, password);
         this.invitation = "";
-        sessionStorage.removeItem("schema-tjapo:jochem:activation");
+        sessionStorage.removeItem(`schema-tjapo:${this.profile.id}:activation`);
         this.activating = false;
         await this.onSession(result.user);
       } else {
@@ -158,6 +159,12 @@ class ProfileAccount {
     if (pending) { this.meta.mutationId = mutationId; this.saveMeta(); }
     this.notify("Synchroniseren…");
     try {
+      // Verified cached sessions are visible before the database SDK starts loading.
+      if (!this.dbApi && !this.databaseReady) {
+        this.databaseReady = import(`https://www.gstatic.com/firebasejs/${this.sdkVersion}/firebase-firestore.js`)
+          .then((db) => { this.dbApi = db; })
+          .catch((error) => { this.databaseReady = null; throw error; });
+      }
       if (this.databaseReady) await this.databaseReady;
       if (epoch !== this.epoch) return false;
       if (this.databaseError) throw this.databaseError;
@@ -177,6 +184,11 @@ class ProfileAccount {
           const payload = { app: "Schema Tjapo", version: 1, revision: (previous?.revision || 0) + 1, mutationId,
             updatedAt: snapshot.updatedAt || new Date().toISOString(), savedAt: new Date().toISOString(), state: snapshot };
           transaction.set(ref, payload);
+          const sharedPlan = this.getSharedPlan?.(snapshot);
+          if (sharedPlan) transaction.set(this.dbApi.doc(this.db, "sharedPlans", this.profile.uid), {
+            profile: this.profile.id, plan: sharedPlan, revision: payload.revision,
+            updatedAt: snapshot.planUpdatedAt || payload.updatedAt,
+          });
           return payload;
         });
         uploaded = !remote?.conflict;
@@ -202,6 +214,8 @@ class ProfileAccount {
         this.meta.pending = false;
         delete this.meta.mutationId;
       }
+      this.meta.awaitingInitialSync = false;
+      this.ready = true;
       this.saveMeta();
       // Persist app migrations only after adopting the server revision they were based on.
       if (migratedRemote) this.queueSave();

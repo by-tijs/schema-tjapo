@@ -4,8 +4,25 @@ service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId}/schemaTjapo/{document=**} {
       allow read, write: if request.auth != null
-        && request.auth.uid in ["DYdNsg9kvTQ1DqQaTJK0HjUUPeD2", "4XLfELa1AoeC4tcqBdW3e4Bz29o1"]
+        && request.auth.uid in ["DYdNsg9kvTQ1DqQaTJK0HjUUPeD2", "4XLfELa1AoeC4tcqBdW3e4Bz29o1", "g5ZZPmjgWDOmZkyVYMrBaeBKb6p2"]
         && request.auth.uid == userId;
+    }
+
+    // Joep shares only his training plan with Tijs, not his workout or weight records.
+    match /sharedPlans/{userId} {
+      allow read: if request.auth != null
+        && userId == "g5ZZPmjgWDOmZkyVYMrBaeBKb6p2"
+        && request.auth.uid in [userId, "DYdNsg9kvTQ1DqQaTJK0HjUUPeD2"];
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId && userId == "g5ZZPmjgWDOmZkyVYMrBaeBKb6p2"
+        && request.resource.data.keys().hasOnly(['profile', 'plan', 'updatedAt', 'revision'])
+        && request.resource.data.profile == 'joep'
+        && request.resource.data.updatedAt is string
+        && request.resource.data.revision is int
+        && request.resource.data.plan.keys().hasOnly(['version', 'days', 'order'])
+        && request.resource.data.plan.version == 1
+        && request.resource.data.plan.days is list && request.resource.data.plan.days.size() <= 60
+        && request.resource.data.plan.order is list;
     }
 
     match /users/{userId}/perfectDay/{document=**} {

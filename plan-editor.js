@@ -12,7 +12,7 @@ window.PlanEditor = (() => {
     if (draft) { alignRail("end"); return; }
     draft = options.getPlan();
     baseline = JSON.stringify(draft);
-    selected = draft.days.some((day) => day.id === options.activeDay()) ? options.activeDay() : draft.days[0].id;
+    selected = draft.days.some((day) => day.id === options.activeDay()) ? options.activeDay() : draft.days[0]?.id || null;
     expanded = pendingDelete = null;
     freshExercises.clear(); appliedSuggestions.clear();
     render("end");
@@ -24,7 +24,7 @@ window.PlanEditor = (() => {
     if (!draft) return;
     const previousScroll = root.querySelector(".session-rail")?.scrollLeft || 0;
     const day = draft.days.find((item) => item.id === selected) || draft.days[0];
-    selected = day.id;
+    selected = day?.id || null;
     const index = draft.days.indexOf(day);
     root.innerHTML = `<form id="plan-editor-form" class="plan-form" novalidate>
       <p class="plan-status" role="status" aria-live="polite"></p>
@@ -32,15 +32,15 @@ window.PlanEditor = (() => {
         ${draft.days.map((item) => `<button class="session-chip${item.id === day.id ? " is-active" : ""}" type="button" data-plan-action="select-day" data-id="${item.id}" aria-pressed="${item.id === day.id}"><strong>${esc(item.label || "Naam invullen")}</strong></button>`).join("")}
         <button class="session-chip" type="button" data-plan-action="add-day"${draft.days.length >= 60 ? " disabled" : ""}><strong><i data-lucide="plus"></i>Dag toevoegen</strong></button>
       </div></aside>
-      <section class="training-panel" aria-label="Dag bewerken"><div class="plan-day-heading">
+      ${day ? `<section class="training-panel" aria-label="Dag bewerken"><div class="plan-day-heading">
         <label class="field plan-day-name"><span>Naam van de dag</span><input class="cloud-input" data-plan-field="day-name" value="${esc(day.label)}" placeholder="Naam invullen" maxlength="80" autocomplete="off" required></label>
         <div class="plan-day-actions"><div class="plan-tools">${button("day-up", "arrow-left", "Dag naar links", index === 0 ? "disabled" : "")}${button("day-down", "arrow-right", "Dag naar rechts", index === draft.days.length - 1 ? "disabled" : "")}</div>
           <div class="plan-tools">${day.id !== "overig" ? button("copy-day", "copy", "Dag kopiëren", draft.days.length >= 60 ? "disabled" : "") + button("delete-day", "trash-2", "Dag verwijderen") : ""}</div></div></div>
-        ${pendingDelete === "day" ? `<div class="plan-confirm"><p>${esc(day.label)} uit je schema verwijderen? Je trainingshistorie blijft bewaard.</p><button class="mini-button" type="button" data-plan-action="confirm-day-delete">Dag verwijderen</button><button class="mini-button" type="button" data-plan-action="keep">Behouden</button></div>` : ""}
+        ${pendingDelete === "day" ? `<div class="plan-confirm"><p>${esc(day.label || "Deze dag")} uit je schema verwijderen? Je trainingshistorie blijft bewaard.</p><button class="mini-button" type="button" data-plan-action="confirm-day-delete">Dag verwijderen</button><button class="mini-button" type="button" data-plan-action="keep">Behouden</button></div>` : ""}
         ${day.id === "overig" ? `<p class="record-meta">Overig blijft beschikbaar voor losse activiteiten. Hieronder bewerk je de snelkeuzes.</p>` : ""}
         <div class="exercise-list">${day.exercises.map((exercise, i) => renderExercise(exercise, i, day)).join("")}</div>
         <button class="mini-button plan-add-exercise" type="button" data-plan-action="add-exercise"${day.exercises.length >= 80 ? " disabled" : ""}><i data-lucide="plus"></i><span>Oefening toevoegen</span></button>
-      </section></div>
+      </section>` : ""}</div>
     </form>`;
     options.refreshIcons();
     alignRail(railPosition, previousScroll);
@@ -140,7 +140,7 @@ window.PlanEditor = (() => {
         return Boolean(field);
       });
       if (!field) continue;
-      selected = day.id; expanded = exercise?.id || null;
+      selected = day?.id || null; expanded = exercise?.id || null;
       pendingDelete = null;
       render("active");
       checkField(`[data-plan-field="${field}"]`);
@@ -154,10 +154,10 @@ window.PlanEditor = (() => {
     draft = null;
     root = null;
     if (!settings.enabled) {
-      document.querySelectorAll("[data-schema-owner]").forEach((element) => element.remove());
+      document.querySelectorAll("[data-plan-editor]").forEach((element) => element.remove());
       return;
     }
-    document.querySelectorAll("[data-schema-owner]").forEach((element) => { element.hidden = false; });
+    document.querySelectorAll("[data-plan-editor]").forEach((element) => { element.hidden = false; });
     root = document.querySelector('[data-view="schema"]');
     document.querySelector('[data-plan-action="cancel"]').addEventListener("click", () => { draft = null; location.hash = "train"; });
     root.addEventListener("input", (event) => {
@@ -220,7 +220,7 @@ window.PlanEditor = (() => {
       const action = trigger.dataset.planAction;
       const day = draft.days.find((item) => item.id === selected);
       const exerciseId = trigger.closest("[data-plan-exercise]")?.dataset.planExercise;
-      const exerciseIndex = day.exercises.findIndex((item) => item.id === exerciseId);
+      const exerciseIndex = day?.exercises.findIndex((item) => item.id === exerciseId) ?? -1;
       if (action === "select-day") { selected = trigger.dataset.id; resetSelection(); }
       if (action === "add-day") { selected = model.addDay(draft, "").id; resetSelection(); }
       if (action === "copy-day") { selected = model.copyDay(draft, day.id)?.id || day.id; resetSelection(); }
@@ -229,7 +229,7 @@ window.PlanEditor = (() => {
         draft.order = draft.days.filter((item) => item.id !== "overig").map((item) => item.id);
       }
       if (action === "delete-day") pendingDelete = "day";
-      if (action === "confirm-day-delete") { model.removeDay(draft, day.id); selected = draft.days[0].id; resetSelection(); }
+      if (action === "confirm-day-delete") { model.removeDay(draft, day.id); selected = draft.days[0]?.id || null; resetSelection(); }
       if (action === "keep") pendingDelete = null;
       if (action === "toggle-exercise") { expanded = expanded === exerciseId ? null : exerciseId; pendingDelete = null; }
       if (action === "exercise-up" || action === "exercise-down") model.move(day.exercises, exerciseIndex, action === "exercise-up" ? -1 : 1);

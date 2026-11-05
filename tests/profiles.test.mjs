@@ -38,7 +38,7 @@ test('Jochem has two lower days in the cycle and Stats, with the requested exerc
     assert.equal(j.run(`findSession('${id}').exercises.every(e => e.setCount === 2)`), true);
   }
   assert.equal(j.run('findSession("lower-b").exercises.slice(-2).every(e => e.unilateral)'), true);
-  assert.equal(j.run('findSession("overig").exercises.some(e => e.id === "deadlift")'), false);
+  assert.equal(j.run('findSession("overig")'), undefined);
   for (const [completed,next] of [['upper-a','lower-a'],['lower-a','upper-b'],['upper-b','lower-b'],['lower-b','upper-c'],['upper-c','upper-d'],['upper-d','upper-a']]) {
     assert.equal(j.run(`advanceCycle('${completed}'); getNextSession().id`), next);
   }

@@ -122,12 +122,44 @@ test('correcting an exercise name keeps previous sets and chart measurements und
   assert.equal(a.run('getChartMetrics("Upper").filter(item => item.value === makeExerciseMetricValue("Flat Smith press")).length'), 1);
 });
 
-test('Jochem ignores an owner plan and cannot commit any schema edits', () => {
+test('Jochem can edit his plan while retaining prior sets and using personal muscle groups', () => {
   const a = app({ search: '?profiel=jochem' });
-  a.run('state.personalPlan = getPersonalPlan(); state.personalPlan.days = [state.personalPlan.days.find(day => day.id === "overig")]; ensureDefaults();');
-  assert.equal(a.run('sessions.some(day => day.id === "lower-a")'), true);
-  assert.equal(a.run('sessions[0].exercises[0].name'), 'Bench Press');
-  assert.throws(() => a.run('commitPersonalPlan(getPersonalPlan(), JSON.stringify(getPersonalPlan()))'), /alleen beschikbaar voor Tijs/);
+  a.run(`var w = getActiveWorkout(); w.exercises['bench-press'].sets[0] = {weight:'60',reps:'8',rpe:'8'};
+    editPlan(plan => { const day = window.PersonalPlan.addDay(plan, 'Eigen dag');
+      day.exercises.push(window.PersonalPlan.newExercise('Eigen oefening', 2, {muscleGroup:'hamstrings'}));
+      plan.days[0].exercises[0].setCount = 3; });`);
+  assert.equal(a.run('sessions.some(day => day.label === "Eigen dag")'), true);
+  assert.equal(a.run('sessions.some(day => day.id === "overig")'), false);
+  assert.equal(a.run('getActiveWorkout().exercises["bench-press"].sets[0].weight'), '60');
+  assert.equal(a.run('getActiveWorkout().exercises["bench-press"].sets.length'), 2);
+  assert.equal(a.run('getWorkout("upper-a", "2099-01-01").exercises["bench-press"].sets.length'), 3);
+  assert.equal(a.run('getChartMetrics("Lower", "hamstrings").some(item => item.label === "Eigen oefening")'), true);
+});
+
+test('Joep starts with zero days, can save his first exercise and return to an empty plan', () => {
+  const a = app({ search: '?profiel=joep' });
+  assert.equal(a.run('USER_PROFILE.id'), 'joep');
+  assert.deepEqual(a.json('sessions'), []);
+  assert.deepEqual(a.json('getPersonalPlan().days'), []);
+  assert.equal(a.run('state.activeSessionId'), null);
+  assert.equal(a.run('getActiveWorkout()'), null);
+  assert.deepEqual(a.json('state.workouts'), {});
+  assert.equal(a.run('window.PersonalPlan.valid(getPersonalPlan())'), true);
+  a.run(`editPlan(plan => { const day = window.PersonalPlan.addDay(plan, 'Training 1');
+    day.exercises.push(window.PersonalPlan.newExercise('Bankdrukken', 3, {muscleGroup:'push'})); });`);
+  assert.equal(a.run('sessions.length'), 1);
+  assert.equal(a.run('getActiveWorkout().exercises[sessions[0].exercises[0].id].sets.length'), 3);
+  a.run('editPlan(plan => window.PersonalPlan.removeDay(plan, plan.days[0].id)); ensureDefaults();');
+  assert.deepEqual(a.json('sessions'), []);
+  assert.equal(a.run('state.activeSessionId'), null);
+  assert.equal(a.run('getActiveWorkout()'), null);
+  assert.equal(a.run('stateHasMeaningfulData(state)'), true);
+});
+
+test('new days append in order when a profile has no Overig', () => {
+  const a = app({ search: '?profiel=joep' });
+  a.run(`editPlan(plan => {window.PersonalPlan.addDay(plan, 'Een'); window.PersonalPlan.addDay(plan, 'Twee');});`);
+  assert.deepEqual(a.json('sessions.map(day => day.label)'), ['Een', 'Twee']);
 });
 
 test('a stale editor cannot overwrite a newer schema; invalid or duplicate IDs are rejected', () => {
@@ -151,10 +183,10 @@ test('exercise replacement uses a new identity and suggestions never copy previo
   assert.equal(exercise.unilateral, true);
 });
 
-test('editor entry points are owner-only and reuse existing button and card styles', () => {
+test('editor entry points are available to profiles and reuse existing styles', () => {
   for (const file of ['plan-model.js', 'plan-editor.js', 'plan-editor.css']) assert.ok(read('sw.js').includes(file));
-  assert.match(read('index.html'), /href="#schema" data-view-link="schema" data-schema-owner hidden/);
-  assert.match(read('index.html'), /data-view="schema" data-schema-owner/);
+  assert.match(read('index.html'), /href="#schema" data-view-link="schema" data-plan-editor hidden/);
+  assert.match(read('index.html'), /data-view="schema" data-plan-editor/);
   const removed = [];
   const context = vm.createContext({ window: {}, document: { querySelectorAll: () => [{remove(){removed.push('link');}}, {remove(){removed.push('view');}}] } });
   vm.runInContext(read('plan-model.js') + '\n' + read('plan-editor.js'), context);
@@ -195,7 +227,7 @@ test('muscle groups keep automatic classification compatible and reject unknown 
   a.run('var plan = getPersonalPlan(); plan.days[0].exercises[0].muscleGroup="invalid";');
   assert.equal(a.run('window.PersonalPlan.valid(plan)'), false);
   const jochem = app({search:'?profiel=jochem'});
-  assert.equal(jochem.run('getExerciseCategory({name:"Calve raises",muscleGroup:"abs"}, "Lower")'), 'calves');
+  assert.equal(jochem.run('getExerciseCategory({name:"Calve raises",muscleGroup:"abs"}, "Lower")'), 'abs');
 });
 
 test('Stats follows each exercise across freely named mixed training days', () => {
@@ -245,8 +277,8 @@ test('legacy neck, traps and grip move to Accessories without rewriting logged d
     assert.equal(a.run(`getOwnerExerciseCategory({name:${JSON.stringify(name)}})`), category);
   }
   const jochem = app({search:'?profiel=jochem'});
-  assert.equal(jochem.run('CHART_GROUPS.includes("Accessories")'), false);
-  assert.equal(jochem.run('getChartFilters("Lower").some(item => item.value === "neck")'), true);
+  assert.equal(jochem.run('CHART_GROUPS.includes("Accessories")'), true);
+  assert.equal(jochem.run('getChartFilters("Lower").some(item => item.value === "neck")'), false);
 });
 
 test('Lower separates hamstrings from quads and glutes, including the former broad legs category', () => {

@@ -6,14 +6,50 @@
   "redirects": [
     {
       "source": "/index.html",
-      "has": [{ "type": "query", "key": "profiel", "value": "jochem" }],
+      "has": [
+        {
+          "type": "query",
+          "key": "profiel",
+          "value": "jochem"
+        }
+      ],
       "destination": "/jochem.html",
       "permanent": false
     },
     {
       "source": "/",
-      "has": [{ "type": "query", "key": "profiel", "value": "jochem" }],
+      "has": [
+        {
+          "type": "query",
+          "key": "profiel",
+          "value": "jochem"
+        }
+      ],
       "destination": "/jochem.html",
+      "permanent": false
+    },
+    {
+      "source": "/index.html",
+      "has": [
+        {
+          "type": "query",
+          "key": "profiel",
+          "value": "joep"
+        }
+      ],
+      "destination": "/joep.html",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [
+        {
+          "type": "query",
+          "key": "profiel",
+          "value": "joep"
+        }
+      ],
+      "destination": "/joep.html",
       "permanent": false
     }
   ],
@@ -21,31 +57,55 @@
     {
       "source": "/jochem.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
       ]
     },
     {
       "source": "/app-version.json",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
       ]
     },
     {
       "source": "/sw.js",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
       ]
     },
     {
       "source": "/index.html",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
       ]
     },
     {
       "source": "/",
       "headers": [
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/joep.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
       ]
     }
   ]

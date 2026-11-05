@@ -67,6 +67,43 @@ test('A fresh device waits for the first cloud state, without granting access to
  assert.equal(a.account.ready,false);
  assert.equal(a.state.history,undefined);
 });
+test('A fresh device stays gated when its first cloud download fails',async()=>{
+ const a=fixture();
+ a.account.dbApi.getDocFromServer=async()=>{throw new Error('offline');};
+ await a.account.onSession({uid});
+ assert.equal(a.account.authenticated,true);
+ assert.equal(a.account.ready,false);
+ assert.equal(a.account.meta.pending,false);
+ assert.equal(a.writes,0);
+ const b=fixture({storage:a.storage});
+ b.account.dbApi.getDocFromServer=async()=>{throw new Error('offline');};
+ await b.account.onSession({uid});
+ assert.equal(b.account.ready,false);
+ b.account.dbApi.getDocFromServer=async()=>({exists:()=>false});
+ assert.equal(await b.account.sync(),true);
+ assert.equal(b.account.ready,true);
+});
+test('Joep shares only his plan in the same transaction as his own state',async()=>{
+ const a=fixture();await a.account.onSession({uid});await a.account.sync();
+ const joep='g5ZZPmjgWDOmZkyVYMrBaeBKb6p2';
+ a.account.profile={id:'joep',uid:joep};a.account.ref=null;
+ const plan={version:1,days:[],order:[]};
+ a.account.getSharedPlan=s=>s.personalPlan;
+ a.state={personalPlan:plan,history:[{reps:8}],bodyweight:80,planUpdatedAt:'2026-11-05T00:00:00Z'};
+ const writes=[];
+ a.account.dbApi.runTransaction=async(_db,fn)=>fn({
+  get:async()=>({exists:()=>false}),set:(ref,payload)=>writes.push({ref,payload})
+ });
+ a.account.queueSave();assert.equal(await a.account.sync(),true);
+ assert.equal(writes.length,2);
+ assert.equal(writes[0].ref,`users/${joep}/schemaTjapo/state`);
+ assert.equal(writes[1].ref,`sharedPlans/${joep}`);
+ assert.deepEqual(structuredClone(writes[1].payload.plan),plan);
+ assert.deepEqual(Object.keys(writes[1].payload).sort(),['plan','profile','revision','updatedAt']);
+ assert.equal(writes[1].payload.revision,writes[0].payload.revision);
+ assert.equal(writes[1].payload.updatedAt,a.state.planUpdatedAt);
+ assert.equal(a.account.meta.pending,false);
+});
 test('Edits during background startup cannot be overwritten by a newer remote revision',async()=>{
  const a=fixture({storage:new Map([[key,JSON.stringify({history:[{id:'cached'}]})]])});
  let release;

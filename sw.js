@@ -1,36 +1,38 @@
 "use strict";
 
-const CACHE_NAME = "schema-tjapo-cache-v213";
+const CACHE_NAME = "schema-tjapo-cache-v214";
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./jochem.html",
-  "./styles.css?v=213",
-  "./mono-preview.css?v=213",
-  "./rehab.css?v=213",
-  "./rehab-plan.js?v=213",
-  "./rehab.js?v=213",
-  "./plan-model.js?v=213",
-  "./plan-editor.js?v=213",
-  "./plan-editor.css?v=213",
+  "./joep.html",
+  "./styles.css?v=214",
+  "./mono-preview.css?v=214",
+  "./rehab.css?v=214",
+  "./rehab-plan.js?v=214",
+  "./rehab.js?v=214",
+  "./plan-model.js?v=214",
+  "./plan-editor.js?v=214",
+  "./plan-editor.css?v=214",
   "./fonts/kh-teka-regular.woff2",
-  "./firebase-config.js?v=213",
-  "./app.js?v=213",
-  "./app-startup.js?v=213",
-  "./vendor/lucide-1.69.0.min.js",
-  "./profile-cloud.js?v=213",
-  "./app-updates.js?v=213",
-  "./rest-alarm.mp3?v=213",
-  "./side-alarm.mp3?v=213",
-  "./audio-unlock.mp3?v=213",
-  "./manifest.webmanifest?v=213",
-  "./manifest-jochem.webmanifest?v=213",
-  "./favicon.ico?v=213",
-  "./favicon-32.png?v=213",
-  "./apple-touch-icon.png?v=213",
-  "./icon-192.png?v=213",
-  "./icon-512.png?v=213",
-  "./icon-maskable-512.png?v=213",
+  "./firebase-config.js?v=214",
+  "./app.js?v=214",
+  "./app-startup.js?v=214",
+  "./vendor/lucide-schema-1.69.0.min.js",
+  "./profile-cloud.js?v=214",
+  "./app-updates.js?v=214",
+  "./rest-alarm.mp3?v=214",
+  "./side-alarm.mp3?v=214",
+  "./audio-unlock.mp3?v=214",
+  "./manifest.webmanifest?v=214",
+  "./manifest-jochem.webmanifest?v=214",
+  "./manifest-joep.webmanifest?v=214",
+  "./favicon.ico?v=214",
+  "./favicon-32.png?v=214",
+  "./apple-touch-icon.png?v=214",
+  "./icon-192.png?v=214",
+  "./icon-512.png?v=214",
+  "./icon-maskable-512.png?v=214",
 ];
 
 self.addEventListener("install", (event) => {
@@ -55,18 +57,24 @@ self.addEventListener("fetch", (event) => {
   }
   if (event.request.mode === "navigate" || event.request.destination === "document") {
     const url = new URL(event.request.url);
-    const cacheKey = url.pathname.endsWith("/jochem.html")
-      || url.searchParams.get("profiel")?.trim().toLowerCase() === "jochem"
-      ? "./jochem.html" : "./index.html";
-    event.respondWith(
-      fetch(event.request)
-        .then((response) => {
-          const copy = response.clone();
-          if (response.ok) caches.open(CACHE_NAME).then((cache) => cache.put(cacheKey, copy)).catch(() => {});
-          return response;
-        })
-        .catch(() => caches.match(cacheKey)),
-    );
+    const profile = url.pathname.match(/\/(jochem|joep)\.html$/)?.[1]
+      || url.searchParams.get("profiel")?.trim().toLowerCase();
+    const cacheKey = ["jochem", "joep"].includes(profile) ? `./${profile}.html` : "./index.html";
+    const cache = caches.open(CACHE_NAME);
+    const fresh = fetch(event.request).then(async (response) => {
+      if (response.ok) await (await cache).put(cacheKey, response.clone()).catch(() => {});
+      return response;
+    });
+    event.waitUntil(fresh.catch(() => {}));
+    // Open the installed shell immediately. Background refresh never replaces
+    // the visible document; the existing update button remains in control.
+    const requestedVersion = url.searchParams.get("v");
+    const forceFresh = requestedVersion && CACHE_NAME !== `schema-tjapo-cache-v${requestedVersion}`;
+    event.respondWith((async () => {
+      const cached = await (await cache).match(cacheKey);
+      if (cached && !forceFresh) return cached;
+      try { return await fresh; } catch (error) { if (cached) return cached; throw error; }
+    })());
     return;
   }
 
