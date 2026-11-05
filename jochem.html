@@ -9,28 +9,28 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Schema Jochem">
   <title>Schema Jochem</title>
-  <link rel="manifest" href="manifest-jochem.webmanifest?v=214">
-  <link rel="icon" href="favicon.ico?v=214" type="image/x-icon" sizes="any">
-  <link rel="icon" href="favicon-32.png?v=214" type="image/png" sizes="32x32">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=214" sizes="180x180">
+  <link rel="manifest" href="manifest-jochem.webmanifest?v=215">
+  <link rel="icon" href="favicon.ico?v=215" type="image/x-icon" sizes="any">
+  <link rel="icon" href="favicon-32.png?v=215" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=215" sizes="180x180">
   <link rel="preload" href="fonts/kh-teka-regular.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="styles.css?v=214">
-  <link rel="stylesheet" href="mono-preview.css?v=214">
-  <link rel="stylesheet" href="rehab.css?v=214">
-  <link rel="stylesheet" href="plan-editor.css?v=214">
-  <script src="app-startup.js?v=214" defer></script>
+  <link rel="stylesheet" href="styles.css?v=215">
+  <link rel="stylesheet" href="mono-preview.css?v=215">
+  <link rel="stylesheet" href="rehab.css?v=215">
+  <link rel="stylesheet" href="plan-editor.css?v=215">
+  <script src="app-startup.js?v=215" defer></script>
   <script src="vendor/lucide-schema-1.69.0.min.js" defer></script>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js" crossorigin>
-  <script src="firebase-config.js?v=214" defer></script>
-  <script src="profile-cloud.js?v=214" defer></script>
-  <script src="app-updates.js?v=214" defer></script>
-  <script src="rehab-plan.js?v=214" defer></script>
-  <script src="rehab.js?v=214" defer></script>
-  <script src="plan-model.js?v=214" defer></script>
-  <script src="plan-editor.js?v=214" defer></script>
-  <script src="app.js?v=214" defer></script>
+  <script src="firebase-config.js?v=215" defer></script>
+  <script src="profile-cloud.js?v=215" defer></script>
+  <script src="app-updates.js?v=215" defer></script>
+  <script src="rehab-plan.js?v=215" defer></script>
+  <script src="rehab.js?v=215" defer></script>
+  <script src="plan-model.js?v=215" defer></script>
+  <script src="plan-editor.js?v=215" defer></script>
+  <script src="app.js?v=215" defer></script>
 </head>
 <body>
   <noscript>Schakel JavaScript in om je schema te openen.</noscript>
@@ -55,27 +55,27 @@
   </section>
   <div class="app-shell">
     <nav class="view-tabs" aria-label="Navigatie">
-      <a href="#train" data-view-link="train" class="is-active">
+      <a href="#train" data-view-link="train" class="is-active" draggable="false">
         <i data-lucide="dumbbell"></i>
         <span>Train</span>
       </a>
-      <a href="#log" data-view-link="log">
+      <a href="#log" data-view-link="log" draggable="false">
         <i data-lucide="history"></i>
         <span>Log</span>
       </a>
-      <a href="#weight" data-view-link="weight">
+      <a href="#weight" data-view-link="weight" draggable="false">
         <i data-lucide="scale"></i>
         <span>Gewicht</span>
       </a>
-      <a href="#stats" data-view-link="stats">
+      <a href="#stats" data-view-link="stats" draggable="false">
         <i data-lucide="chart-no-axes-combined"></i>
         <span>Stats</span>
       </a>
-      <a href="#schema" data-view-link="schema" data-plan-editor hidden>
+      <a href="#schema" data-view-link="schema" data-plan-editor hidden draggable="false">
         <i data-lucide="pencil"></i>
         <span>Bewerken</span>
       </a>
-      <a href="#rehab" data-view-link="rehab" data-rehab-owner hidden>
+      <a href="#rehab" data-view-link="rehab" data-rehab-owner hidden draggable="false">
         <i data-lucide="activity"></i>
         <span>Rehab</span>
       </a>
@@ -331,8 +331,8 @@
     </button>
   </div>
 
-  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=214" preload="none" muted loop playsinline aria-hidden="true"></audio>
-  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=214" preload="none" muted playsinline aria-hidden="true"></audio>
+  <audio id="rest-alarm-audio" data-src="rest-alarm.mp3?v=215" preload="none" muted loop playsinline aria-hidden="true"></audio>
+  <audio id="side-alarm-audio" data-src="side-alarm.mp3?v=215" preload="none" muted playsinline aria-hidden="true"></audio>
 
   <div id="rest-alarm" class="rest-alarm" hidden>
     <div class="rest-alarm-backdrop" aria-hidden="true"></div>

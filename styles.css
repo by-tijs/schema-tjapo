@@ -171,12 +171,23 @@ body.has-rest-timer .app-shell {
   overscroll-behavior-x: contain;
   scroll-snap-type: x proximity;
   touch-action: pan-x;
+  user-select: none;
+  -webkit-user-select: none;
   padding: clamp(5px, 1.5vw, 6px);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: rgba(17, 19, 21, 0.92);
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px);
+}
+
+.view-tabs.is-dragging {
+  scroll-snap-type: none;
+}
+
+.view-tabs.is-dragging,
+.view-tabs.is-dragging a {
+  cursor: grabbing;
 }
 
 .view-tabs a {
