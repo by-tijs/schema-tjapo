@@ -52,3 +52,11 @@ De app controleert bij openen, terugkomst en tijdens gebruik op een nieuwe versi
 Tijs heeft in Upper A twee sets Flat smith in plaats van Single cable press. De oude oefening blijft beschikbaar in Stats, met behoud van historische sets, grafieken en records. Historische oefeningen worden vanuit de opgeslagen training gelezen, onafhankelijk van het huidige schema.
 
 Stats toont datum en meetwaarde bij aanwijzen, aanraken of horizontaal schuiven over de grafiek. De pijltjestoetsen en Home/End werken ook. Verticaal scrollen blijft beschikbaar.
+
+## Eigen schema van Tijs
+
+Alleen Tijs heeft bij Train de knop **Schema bewerken**. Via `#schema` kan hij trainingsdagen toevoegen, hernoemen, kopiëren, verplaatsen en verwijderen, en oefeningen met vaste setaantallen beheren. Overig blijft beschikbaar voor losse activiteiten; de snelkeuzes zijn bewerkbaar. Oefeningnamen hebben optionele suggesties. Setup, rusttijd, links/rechts, lichaamsgewicht en tijdmetingen staan bij Meer opties. Wijzigingen worden pas toegepast met Schema opslaan; Annuleren laat het opgeslagen schema intact.
+
+`plan-model.js` beheert `state.personalPlan`; `plan-editor.js` en `plan-editor.css` gebruiken de bestaande kaarten, knoppen en dagenrij. Zonder opgeslagen persoonlijk schema blijft het bestaande schema actief. Het schema wordt via dezelfde lokale opslag, cloudsync en backup meegenomen. De editor weigert een verouderde schemaversie te overschrijven. Jochem gebruikt uitsluitend zijn bestaande vaste schema, ook wanneer een backup een persoonlijk schema bevat.
+
+Bij opslaan krijgen ingevulde trainingen en historische sessies een eigen `sessionSnapshot`; lege concepttrainingen worden opnieuw opgebouwd uit het aangepaste schema. Verwijderde dagen worden intern bewaard voor historische verwijzingen. Log, vorige sets, voltooiing, records en grafieken lezen de vastgelegde training. Naamscorrecties behouden de koppeling met eerdere metingen via `nameAliases`; Vervangen maakt een nieuwe oefeningdefinitie. Nieuwe trainingsdagen behouden hun vaste ID bij hernoemen of verplaatsen.

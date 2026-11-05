@@ -40,7 +40,7 @@ const GYM_TIME = Object.freeze({
   defaultCardioSeconds: 10 * 60,
 });
 
-const sessions = [
+const DEFAULT_SESSIONS = [
   {
     id: "upper-a",
     group: "Upper",
@@ -200,8 +200,10 @@ const sessions = [
       : session;
   });
 
-const cycleOrder = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-c", "lower-c", "upper-d", "lower-d"]
-  .filter((id) => sessions.some((session) => session.id === id));
+const DEFAULT_CYCLE_ORDER = ["upper-a", "lower-a", "upper-b", "lower-b", "upper-c", "lower-c", "upper-d", "lower-d"]
+  .filter((id) => DEFAULT_SESSIONS.some((session) => session.id === id));
+let sessions = DEFAULT_SESSIONS;
+let cycleOrder = DEFAULT_CYCLE_ORDER;
 const CHART_GROUPS = ["Upper", "Lower", "Running", "Gewicht"];
 // Keep the retired press selectable in Tijs' Stats without renaming its old data.
 const ARCHIVED_UPPER_EXERCISES = USER_PROFILE ? []
@@ -298,7 +300,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "206";
+const APP_VERSION = "207";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -445,18 +447,36 @@ function compoundBodyweight(id, name, setCount, setup = "") {
 }
 
 function getProgramExerciseName(exercise) {
+  if (exercise?.frozenName) return exercise.name;
   const override = state.exerciseNames?.[exercise?.id];
   return String(override || exercise?.name || "").trim() || exercise?.name || "Oefening";
 }
 
 function setProgramExerciseName(exerciseId, value) {
-  const session = findSession(state.activeSessionId);
+  const session = getTrainingSession();
   const exercise = session?.exercises.find((item) => item.id === exerciseId);
   if (!exercise) return;
 
   const previousName = getProgramExerciseName(exercise);
   const nextName = String(value || "").trim();
   state.exerciseNames ||= {};
+
+  if (!USER_PROFILE && state.personalPlan) {
+    if (!nextName) return;
+    const canonical = getCanonicalPlanName(previousName);
+    if (normalizeExerciseName(nextName) !== canonical) {
+      state.personalPlan.nameAliases ||= {};
+      state.personalPlan.nameAliases[normalizeExerciseName(nextName)] = canonical;
+    }
+    exercise.name = nextName;
+    const planned = sessions.find((day) => day.id === session.id)?.exercises.find((item) => item.id === exerciseId);
+    if (planned) planned.name = nextName;
+    const entry = getActiveWorkout().exercises[exerciseId];
+    if (entry) entry.name = nextName;
+    delete state.exerciseNames[exerciseId];
+    historyCache.ref = null;
+    return;
+  }
 
   if (!nextName || nextName === exercise.name) {
     delete state.exerciseNames[exerciseId];
@@ -477,6 +497,8 @@ function init() {
   bindElements();
   configureLocalProfile();
   window.Rehab?.mount({ enabled: !USER_PROFILE, getState: () => state, save: saveState, flush: flushStateSave, refreshIcons, notify: showToast });
+  window.PlanEditor?.mount({ enabled: !USER_PROFILE, getPlan: getPersonalPlan, activeDay: () => state.activeSessionId,
+    commit: commitPersonalPlan, suggestions: getPlanSuggestions, refreshIcons });
   installListeners();
   const migrated = ensureDefaults();
   if (migrated) flushStateSave();
@@ -650,6 +672,7 @@ function installListeners() {
 }
 
 function ensureDefaults() {
+  syncPersonalPlan();
   let changed = false;
   if (typeof state.soundEnabled !== "boolean") {
     state.soundEnabled = false;
@@ -675,7 +698,8 @@ function ensureDefaults() {
     state.weightDate = currentDate;
     changed = true;
   }
-  if (!findSession(state.activeSessionId)) state.activeSessionId = getNextSession().id;
+  if (!sessions.some((day) => day.id === state.activeSessionId)
+    && !workoutHasMeaningfulData(state.workouts?.[workoutKey(state.activeSessionId, state.activeDate)])) state.activeSessionId = getNextSession().id;
   if (!Number.isInteger(state.cycleIndex)) state.cycleIndex = 0;
   if (state.cycleIndex < 0 || state.cycleIndex >= cycleOrder.length) state.cycleIndex = 0;
   state.cycleCompleted = Array.isArray(state.cycleCompleted)
@@ -863,7 +887,9 @@ function renderSessionOptions() {
 }
 
 function renderSessionRail() {
-  const sessionButtons = sessions
+  const active = getTrainingSession();
+  const visibleSessions = active && !sessions.some((day) => day.id === active.id) ? [...sessions, active] : sessions;
+  const sessionButtons = visibleSessions
     .map((session) => {
       const active = session.id === state.activeSessionId ? " is-active" : "";
       const complete = isCycleSessionComplete(session.id) ? " is-cycle-complete" : "";
@@ -1109,7 +1135,7 @@ function renderDatePicker() {
   const calendarStart = addDays(monthStart, -getMondayOffset(monthStart));
   const todayString = today();
   const calendarStates = getCalendarDateStates(uiState.datePickerContext);
-  const activeSession = findSession(state.activeSessionId);
+  const activeSession = getTrainingSession();
 
   if (els.datePickerMonth) els.datePickerMonth.textContent = formatMonthTitle(monthStart);
   if (els.datePickerSelected) els.datePickerSelected.textContent = formatDateNumeric(selectedDate);
@@ -1203,7 +1229,7 @@ function getCalendarDateStates(context = "train") {
 }
 
 function workoutHasCompletedItems(workout) {
-  const session = findSession(workout?.sessionId);
+  const session = getWorkoutSession(workout);
   return getAllWorkoutEntries(workout, session).some((entry) => {
     if (isMetricEntry(entry)) {
       return getMetricAttempts(entry).some((attempt) => hasCompleteMetricAttempt(attempt, entry.kind));
@@ -1213,7 +1239,7 @@ function workoutHasCompletedItems(workout) {
 }
 
 function workoutHasSkippedExercises(workout) {
-  const session = findSession(workout?.sessionId);
+  const session = getWorkoutSession(workout);
   if (!session || session.id === "overig") return false;
 
   return session.exercises.some((exercise) => {
@@ -1227,7 +1253,7 @@ function workoutHasSkippedExercises(workout) {
 function workoutHasLoggedItems(workout) {
   if (!workout) return false;
   if (String(workout.note || "").trim()) return true;
-  return getAllWorkoutEntries(workout, findSession(workout.sessionId)).some(hasLoggedEntry);
+  return getAllWorkoutEntries(workout, getWorkoutSession(workout)).some(hasLoggedEntry);
 }
 
 function handleDatePickerPointerDown(event) {
@@ -1258,7 +1284,7 @@ function handleDatePickerClick(event) {
 }
 
 function renderTraining() {
-  const session = findSession(state.activeSessionId) || getNextSession();
+  const session = getTrainingSession();
   state.activeSessionId = session.id;
   if (els.sessionSelect) els.sessionSelect.value = session.id;
   renderDateControl();
@@ -1328,7 +1354,7 @@ function renderTrainingTimeEstimate(session, workout) {
 }
 
 function refreshTrainingTimeEstimate() {
-  const session = findSession(state.activeSessionId);
+  const session = getTrainingSession();
   if (!session) return;
   renderTrainingTimeEstimate(session, getActiveWorkout());
 }
@@ -3183,7 +3209,7 @@ function copyPreviousEntry(trigger) {
 }
 
 function completeSession() {
-  const session = findSession(state.activeSessionId);
+  const session = getTrainingSession();
   const workout = getActiveWorkout();
   const totals = getCompletion(workout);
 
@@ -3764,6 +3790,7 @@ function compareIsoDates(a, b) {
 }
 
 function stateHasMeaningfulData(candidate) {
+  if (!USER_PROFILE && window.PersonalPlan?.valid(candidate?.personalPlan)) return true;
   if (window.Rehab?.hasData(candidate)) return true;
   if (Array.isArray(candidate?.history) && candidate.history.length > 0) return true;
   if (Array.isArray(candidate?.cycleCompleted) && candidate.cycleCompleted.length > 0) return true;
@@ -3808,7 +3835,7 @@ function getWorkout(sessionId, date) {
   if (!state.workouts[key]) {
     state.workouts[key] = makeWorkout(session, date);
   }
-  normalizeWorkout(state.workouts[key], session);
+  normalizeWorkout(state.workouts[key], getWorkoutSession(state.workouts[key]) || session);
   return state.workouts[key];
 }
 
@@ -3819,13 +3846,15 @@ function makeWorkout(session, date) {
       exercises[exercise.id] = makeExerciseEntry(exercise, date);
     });
   }
-  return {
+  const workout = {
     date,
     sessionId: session.id,
     note: "",
     exercises,
     customItems: [],
   };
+  if (!USER_PROFILE && state.personalPlan && window.PersonalPlan) workout.sessionSnapshot = window.PersonalPlan.snapshot(session, workout);
+  return workout;
 }
 
 function makeExerciseEntry(exercise, date = state.activeDate) {
@@ -3945,17 +3974,18 @@ function makePresetItem(exercise) {
 
 function ensureExerciseEntry(workout, exerciseId) {
   if (!workout.exercises[exerciseId]) {
-    const session = findSession(workout.sessionId);
+    const session = getWorkoutSession(workout);
     const exercise = session?.exercises.find((item) => item.id === exerciseId) || ex(exerciseId, exerciseId, 1);
     workout.exercises[exerciseId] = makeExerciseEntry(exercise, workout.date);
   }
-  const session = findSession(workout.sessionId);
+  const session = getWorkoutSession(workout);
   const exercise = session?.exercises.find((item) => item.id === exerciseId) || ex(exerciseId, exerciseId, 1);
   normalizeEntry(workout.exercises[exerciseId], exercise, workout.date);
   return workout.exercises[exerciseId];
 }
 
 function normalizeWorkout(workout, session) {
+  session = getWorkoutSession(workout) || session;
   workout.exercises ||= {};
   workout.customItems ||= [];
   if (session.id === "overig") {
@@ -4099,7 +4129,16 @@ function normalizeSetupLabel(value) {
 function getStrengthActivityKey(name, entryOrSetup = "") {
   const setup = typeof entryOrSetup === "object" ? entryOrSetup?.setup : entryOrSetup;
   const normalizedSetup = normalizeExerciseName(normalizeSetupLabel(setup));
-  return `${normalizeExerciseName(name)}::${normalizedSetup}`;
+  return `${getCanonicalPlanName(name)}::${normalizedSetup}`;
+}
+
+function getCanonicalPlanName(name) {
+  let key = normalizeExerciseName(name);
+  if (USER_PROFILE) return key;
+  const aliases = state.personalPlan?.nameAliases || {};
+  const seen = new Set();
+  while (typeof aliases[key] === "string" && !seen.has(key)) { seen.add(key); key = aliases[key]; }
+  return key;
 }
 
 function getStrengthActivityLabel(name, entryOrSetup = "") {
@@ -4180,7 +4219,7 @@ function getActivityTargetFromRef(ref, entry) {
     return makeActivityHistoryTarget(entry);
   }
 
-  const session = findSession(state.activeSessionId);
+  const session = getTrainingSession();
   const exercise = session?.exercises.find((item) => item.id === ref.exerciseId);
   return makeActivityHistoryTarget(entry, exercise);
 }
@@ -4259,7 +4298,7 @@ function getHistoryActivityEntries(historyEntry) {
   const cacheKey = historyEntry.id || getHistorySortKey(historyEntry);
   if (cache.entryActivities.has(cacheKey)) return cache.entryActivities.get(cacheKey);
 
-  const session = findSession(historyEntry.sessionId);
+  const session = getWorkoutSession(historyEntry.workout, historyEntry);
   const workout = historyEntry.workout;
   if (!session || !workout) {
     cache.entryActivities.set(cacheKey, []);
@@ -4585,7 +4624,7 @@ function updateEntrySummary(target, entry) {
 }
 
 function updateTrainingProgressReadout() {
-  const session = findSession(state.activeSessionId);
+  const session = getTrainingSession();
   const workout = getActiveWorkout();
   if (!session || !workout) return;
   renderTrainingTitle(session, getCompletion(workout), session.id === "overig");
@@ -4635,7 +4674,7 @@ function formatPace(secondsPerKm) {
 }
 
 function getCompletion(workout) {
-  const session = findSession(workout.sessionId);
+  const session = getWorkoutSession(workout);
   // Retained exercises belong to history, not to today's planned set target.
   const entries = session && session.id !== "overig"
     ? session.exercises.map((exercise) => workout.exercises?.[exercise.id]).filter(Boolean)
@@ -4859,7 +4898,7 @@ function countFilledWorkoutItems(workout) {
 }
 
 function getWorkoutVolume(workout) {
-  const session = findSession(workout.sessionId);
+  const session = getWorkoutSession(workout);
   return getAllWorkoutEntries(workout, session).reduce((sum, entry) => {
     if (isCardioEntry(entry) || isIsometricEntry(entry)) return sum;
     return sum + (entry.sets || []).reduce((setSum, set) => {
@@ -4875,7 +4914,7 @@ function getWorkoutVolume(workout) {
   }, 0);
 }
 
-function getAllWorkoutEntries(workout, session = findSession(workout.sessionId)) {
+function getAllWorkoutEntries(workout, session = getWorkoutSession(workout)) {
   const base = Object.values(workout.exercises || {});
   if (session?.id !== "overig") return base;
   return [...base.filter(hasLoggedEntry), ...(workout.customItems || [])];
@@ -4929,7 +4968,7 @@ function getCardioSummary(workout) {
 function getHistoryCompletionLabel(historyEntry) {
   const done = Number(historyEntry.doneSets || 0);
   const total = Number(historyEntry.totalSets || 0);
-  const session = findSession(historyEntry.sessionId);
+  const session = getWorkoutSession(historyEntry.workout, historyEntry);
   const label = session?.id === "overig" ? "items" : "sets";
   return `${done}/${total} ${label}`;
 }
@@ -4941,7 +4980,7 @@ function getHistoryProgressSummary(historyEntry) {
 }
 
 function isCompleteHistoryWorkout(historyEntry) {
-  const session = findSession(historyEntry?.sessionId);
+  const session = getWorkoutSession(historyEntry?.workout, historyEntry);
   const workout = historyEntry?.workout;
   if (!session || !workout) return false;
 
@@ -5081,7 +5120,7 @@ function getBoomingMuscleGroups(group, rangeDays = getStatsRangeDays()) {
 function getStrengthRecords(group, filter, rangeDays = getStatsRangeDays()) {
   const records = new Map();
   getStatsHistory(rangeDays).forEach((historyEntry) => {
-    const session = findSession(historyEntry.sessionId);
+    const session = getWorkoutSession(historyEntry.workout, historyEntry);
     const workout = historyEntry.workout;
     if (!session || !workout || session.group !== group) return;
 
@@ -5248,7 +5287,7 @@ function getChartMetrics(group, filter = "all") {
   const catalog = sessions.filter((session) => session.group === group).flatMap((session) => session.exercises);
   if (group === "Upper") catalog.push(...ARCHIVED_UPPER_EXERCISES);
   getSortedHistoryAsc().forEach((historyEntry) => {
-    const session = findSession(historyEntry.sessionId);
+    const session = getWorkoutSession(historyEntry.workout, historyEntry);
     if (session?.group === group && historyEntry.workout) {
       catalog.push(...getRecordedProgramExercises(historyEntry.workout, session));
     }
@@ -5341,7 +5380,7 @@ function getStrengthIndexTrendPoints(group, filter = "all", rangeDays = getStats
 }
 
 function getStrengthIndexMeasurements(historyEntry, group, filter = "all") {
-  const session = findSession(historyEntry.sessionId);
+  const session = getWorkoutSession(historyEntry.workout, historyEntry);
   const workout = historyEntry.workout;
   if (!session || !workout || session.group !== group) return [];
 
@@ -5394,7 +5433,7 @@ function getBodyweightTrendPoints(rangeDays = getStatsRangeDays()) {
 }
 
 function getExerciseTrendMeasurement(historyEntry, exerciseKey) {
-  const session = findSession(historyEntry.sessionId);
+  const session = getWorkoutSession(historyEntry.workout, historyEntry);
   const workout = historyEntry.workout;
   if (!session || !workout) return null;
 
@@ -6068,7 +6107,7 @@ function getCycleCompletionStreak() {
 
 function isCompleteCycleHistoryEntry(historyEntry) {
   if (!isCompleteHistoryWorkout(historyEntry)) return false;
-  const session = findSession(historyEntry.sessionId);
+  const session = getWorkoutSession(historyEntry.workout, historyEntry);
   const workout = historyEntry.workout;
   if (!session || !workout || !cycleOrder.includes(session.id)) return false;
 
@@ -6130,7 +6169,96 @@ function isCycleSessionComplete(sessionId) {
 }
 
 function findSession(sessionId) {
-  return sessions.find((session) => session.id === sessionId);
+  return sessions.find((session) => session.id === sessionId)
+    || (!USER_PROFILE && state.personalPlan?.archivedDays?.find((session) => session.id === sessionId));
+}
+
+function getWorkoutSession(workout, historyEntry = null) {
+  if (!USER_PROFILE && workout?.sessionSnapshot) return workout.sessionSnapshot;
+  const current = findSession(workout?.sessionId || historyEntry?.sessionId);
+  if (current || USER_PROFILE || !historyEntry) return current;
+  return { id: historyEntry.sessionId, label: historyEntry.sessionLabel, group: historyEntry.sessionGroup,
+    exercises: Object.entries(workout?.exercises || {}).map(([id, entry]) => ({ ...entry, id, frozenName: true })) };
+}
+
+function getTrainingSession() {
+  const workout = state.workouts?.[workoutKey(state.activeSessionId, state.activeDate)];
+  return getWorkoutSession(workout) || findSession(state.activeSessionId) || getNextSession();
+}
+
+function getPersonalPlan() {
+  return window.PersonalPlan.fromState(state, DEFAULT_SESSIONS, DEFAULT_CYCLE_ORDER);
+}
+
+function syncPersonalPlan() {
+  if (USER_PROFILE || !window.PersonalPlan?.valid(state.personalPlan)) {
+    sessions = DEFAULT_SESSIONS;
+    cycleOrder = DEFAULT_CYCLE_ORDER;
+    return;
+  }
+  sessions = state.personalPlan.days;
+  cycleOrder = window.PersonalPlan.cycle(state.personalPlan);
+}
+
+function commitPersonalPlan(plan, baseline) {
+  if (USER_PROFILE) throw new Error("Schema bewerken is alleen beschikbaar voor Tijs.");
+  if (JSON.stringify(getPersonalPlan()) !== baseline) throw new Error("Je schema is intussen gewijzigd. Annuleer en open Schema bewerken opnieuw om de nieuwste versie te gebruiken.");
+  if (!window.PersonalPlan.valid(plan)) throw new Error("Controleer de namen en het aantal sets in je schema.");
+  const oldPlan = getPersonalPlan();
+  const knownDays = [...oldPlan.days, ...(oldPlan.archivedDays || [])];
+  plan.nameAliases = { ...(oldPlan.nameAliases || {}) };
+  plan.days.forEach((day) => day.exercises.forEach((exercise) => {
+    const old = oldPlan.days.find((item) => item.id === day.id)?.exercises.find((item) => item.id === exercise.id);
+    if (old && normalizeExerciseName(old.name) !== normalizeExerciseName(exercise.name)) {
+      const canonical = getCanonicalPlanName(old.name);
+      const renamed = normalizeExerciseName(exercise.name);
+      if (renamed !== canonical) plan.nameAliases[renamed] = canonical;
+      else delete plan.nameAliases[renamed];
+    }
+  }));
+  const freeze = (workout, historical = false, record = null) => {
+    if (!workout || workout.sessionSnapshot) return;
+    const day = knownDays.find((item) => item.id === workout.sessionId) || getWorkoutSession(workout, record);
+    if (day) workout.sessionSnapshot = window.PersonalPlan.snapshot(day, workout, historical);
+  };
+  state.history.forEach((record) => freeze(record.workout, true, record));
+  Object.entries(state.workouts).forEach(([key, workout]) => {
+    const recorded = state.history.some((item) => item.sessionId === workout.sessionId && item.date === workout.date);
+    if (recorded || countFilledWorkoutItems(workout) > 0 || workout.customItems?.length) freeze(workout);
+    else delete state.workouts[key];
+  });
+  plan.archivedDays = knownDays.filter((day, index, list) => !plan.days.some((item) => item.id === day.id)
+    && list.findIndex((item) => item.id === day.id) === index);
+  state.personalPlan = plan;
+  state.exerciseNames = {};
+  syncPersonalPlan();
+  state.cycleCompleted = (state.cycleCompleted || []).filter((id) => cycleOrder.includes(id));
+  state.cycleIndex = getFirstOpenCycleIndex();
+  const current = state.workouts[workoutKey(state.activeSessionId, state.activeDate)];
+  if (!sessions.some((day) => day.id === state.activeSessionId) && !current) state.activeSessionId = getNextSession().id;
+  historyCache.ref = null;
+  collapseExerciseCards();
+  saveState(true);
+  renderAll();
+  showToast("Schema opgeslagen");
+}
+
+function getPlanSuggestions(plan) {
+  const suggestions = new Map();
+  const add = (exercise) => {
+    if (exercise?.name && !suggestions.has(normalizeExerciseName(exercise.name))) {
+      const { frozenName, ...item } = exercise;
+      suggestions.set(normalizeExerciseName(item.name), item);
+    }
+  };
+  plan.days.flatMap((day) => day.exercises).forEach(add);
+  getSortedHistoryDesc().forEach((record) => getHistoryActivityEntries(record).forEach((item) => add({ ...item.entry, name: item.name })));
+  [compound("bench-press", "Bench press", 3), compound("squat", "Squat", 3),
+    compound("rdl", "Romanian deadlift", 3), compound("shoulder-press", "Shoulder press", 3),
+    compound("cable-row", "Cable row", 3), ex("bicep-curl", "Bicep curl", 3),
+    ex("tricep-extension", "Tricep extension", 3)].forEach((item) => add({ ...item, aliases: item.id === "bench-press" ? "Bankdrukken" : item.name }));
+  DEFAULT_SESSIONS.flatMap((day) => day.exercises).forEach(add);
+  return [...suggestions.values()];
 }
 
 function workoutKey(sessionId, date) {
@@ -6155,7 +6283,7 @@ function syncViewFromHash() {
       section.classList.toggle("is-active", section.dataset.view === view);
     });
     document.querySelectorAll("[data-view-link]").forEach((link) => {
-      link.classList.toggle("is-active", link.dataset.viewLink === view);
+      link.classList.toggle("is-active", link.dataset.viewLink === view || (view === "schema" && link.dataset.viewLink === "train"));
     });
     requestAnimationFrame(scrollActiveViewTabIntoView);
     if (view === "stats" && els.chartCanvas) renderStats();
@@ -6165,6 +6293,7 @@ function syncViewFromHash() {
       if (openingRehab) window.Rehab?.open();
       else window.Rehab?.render();
     }
+    if (view === "schema" && !USER_PROFILE) window.PlanEditor?.open();
     requestAnimationFrame(() => updateSlidingIndicators());
   };
 
