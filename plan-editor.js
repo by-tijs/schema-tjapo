@@ -24,8 +24,6 @@ window.PlanEditor = (() => {
     selected = day.id;
     const index = draft.days.indexOf(day);
     root.innerHTML = `<form class="plan-form">
-      <div class="plan-heading"><div><h1 id="schema-title">Mijn schema</h1><p class="record-meta">Pas je dagen en oefeningen aan. Ingevulde trainingen en historie blijven bewaard.</p></div>
-        <div class="plan-save-actions"><button class="ghost-button" type="button" data-plan-action="cancel">Annuleren</button><button class="primary-button" type="submit"><i data-lucide="check"></i><span>Schema opslaan</span></button></div></div>
       <p class="plan-status" role="status" aria-live="polite"></p>
       <div class="workbench"><aside class="side-panel"><div class="session-rail" aria-label="Dagen bewerken">
         ${draft.days.map((item) => `<button class="session-chip${item.id === day.id ? " is-active" : ""}" type="button" data-plan-action="select-day" data-id="${item.id}" aria-pressed="${item.id === day.id}"><strong>${esc(item.label || "Naamloze dag")}</strong></button>`).join("")}
@@ -43,10 +41,12 @@ window.PlanEditor = (() => {
           <datalist id="plan-suggestions">${options.suggestions(draft).map((exercise) => `<option value="${esc(exercise.name)}">${esc(exercise.aliases || exercise.name)}</option>`).join("")}</datalist>
           <button class="ghost-button" type="button" data-plan-action="add-exercise"><i data-lucide="${replacing ? "repeat-2" : "plus"}"></i><span>${replacing ? "Vervangen" : "Oefening toevoegen"}</span></button>
           ${replacing ? `<button class="mini-button" type="button" data-plan-action="cancel-replace">Vervangen annuleren</button>` : ""}
-          <p class="record-meta">Kies een suggestie of gebruik je eigen naam.</p>
         </div>
       </section></div>
-      <div class="finish-bar plan-bottom-save"><button class="primary-button" type="submit"><i data-lucide="check"></i><span>Wijzigingen opslaan</span></button></div>
+      <footer class="plan-footer" aria-label="Schema bewerken"><div class="plan-footer-actions">
+        <button class="ghost-button" type="button" data-plan-action="cancel">Annuleren</button>
+        <button class="primary-button" type="submit"><i data-lucide="check"></i><span>Opslaan</span></button>
+      </div></footer>
     </form>`;
     options.refreshIcons();
     const rail = root.querySelector(".session-rail"), active = rail.querySelector(".is-active");

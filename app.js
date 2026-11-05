@@ -300,7 +300,7 @@ const DRAG_START_THRESHOLD = 10;
 const DRAG_CLICK_SUPPRESS_MS = 40;
 const SAVE_DEBOUNCE_MS = 180;
 const CLOUD_SYNC_DEBOUNCE_MS = 1200;
-const APP_VERSION = "207";
+const APP_VERSION = "208";
 const FIREBASE_SDK_VERSION = "12.16.0";
 const DECIMAL_INPUT_FIELDS = new Set(["weight", "reps", "rpe", "bodyweight", "daily-bodyweight", "distance", "intensity", "amount", "speed", "metric-rpe"]);
 const ZERO_TO_TEN_INPUT_FIELDS = new Set(["rpe", "metric-rpe", "intensity"]);
@@ -6279,6 +6279,7 @@ function syncViewFromHash() {
 
   const updateView = () => {
     if (changedView) resetPageScroll();
+    document.body.classList.toggle("is-editing-plan", view === "schema" && !USER_PROFILE);
     document.querySelectorAll("[data-view]").forEach((section) => {
       section.classList.toggle("is-active", section.dataset.view === view);
     });
