@@ -10,10 +10,10 @@ function load(globals = {}) {
   return { api: context.window.Rehab, weeks: context.window.REHAB_PLAN, context };
 }
 
-test('two prescribed weeks contain all four days in source order and keep stable exercise IDs', () => {
+test('three prescribed weeks contain all four days, with week 3 repeating week 2', () => {
   const { weeks } = load();
   assert.equal(weeks.length, 5);
-  for (const week of weeks.slice(0, 2)) {
+  for (const week of weeks.slice(0, 3)) {
     assert.deepEqual(Array.from(week.days, day => day.exercises.length), [6, 5, 6, 5]);
     assert.equal(new Set(week.days.map(day => day.id)).size, 4);
     for (const day of week.days) assert.equal(new Set(day.exercises.map(e => e.id)).size, day.exercises.length);
@@ -25,6 +25,7 @@ test('two prescribed weeks contain all four days in source order and keep stable
     '10x15m', '2 x 10m', '3 x 20m progressief met slee', 'short lever 1x25 sec per kant', '2 x 7 max 3kg',
   ]);
   assert.equal(weeks[1].days[1].exercises[4].prescription, '2 x 12 smith machine single leg');
+  assert.deepEqual(weeks[2].days, weeks[1].days);
 });
 
 test('notes stay separate across weeks and repeated exercises, and survive JSON storage', () => {
@@ -37,6 +38,7 @@ test('notes stay separate across weeks and repeated exercises, and survive JSON 
   assert.equal(api.getNote(reload, 'week-1', 'day-2', 'huppelen'), 'Dag twee');
   assert.equal(api.getNote(reload, 'week-1', 'day-4', 'huppelen'), 'Dag vier');
   assert.equal(api.getNote(reload, 'week-2', 'day-2', 'huppelen'), 'Tweede week\nVoelt goed');
+  assert.equal(api.getNote(reload, 'week-3', 'day-2', 'huppelen'), '');
   assert.deepEqual(state.workouts, { original: { note: 'training' } });
   assert.deepEqual(state.history, [{ id: 'unchanged' }]);
   assert.equal(api.setNote(state, 'week-1', 'day-2', '__proto__', 'invalid'), false);
@@ -55,18 +57,18 @@ test('week 2 starts on 26 October in Amsterdam and advances each Monday across t
   ]) assert.equal(api.currentWeek(new Date(date)).id, expected, date);
 });
 
-test('weeks 3 to 5 have dates and empty days without invented exercises or comments', () => {
+test('weeks 4 and 5 retain their dates and empty days without invented exercises or comments', () => {
   const { weeks, api } = load();
   assert.deepEqual(Array.from(weeks.slice(2), week => week.startDate), ['2026-11-02', '2026-11-09', '2026-11-16']);
-  for (const week of weeks.slice(2)) {
+  for (const week of weeks.slice(3)) {
     assert.equal(week.days.length, 4);
     assert.ok(week.days.every(day => day.exercises.length === 0));
     assert.equal(api.weekText({}, week.id), `Rehab Tijs — ${week.label}\n\nSchema volgt nog.`);
     assert.equal(api.setNote({}, week.id, 'day-1', 'ski', 'invented'), false);
   }
-  const ui = mounted({ now: () => new Date('2026-11-02T10:00:00Z') });
+  const ui = mounted({ now: () => new Date('2026-11-09T10:00:00Z') });
   ui.api.render();
-  assert.match(ui.root.innerHTML, /Het schema voor week 3 volgt nog\./);
+  assert.match(ui.root.innerHTML, /Het schema voor week 4 volgt nog\./);
   assert.match(ui.root.innerHTML, /class="finish-bar rehab-copy-bar" hidden/);
   assert.ok(!ui.root.innerHTML.includes('data-rehab-note='));
 });
@@ -95,7 +97,7 @@ test('resuming an installed app after Monday advances to the new week', () => {
   date = new Date('2026-11-01T23:01:00Z');
   ui.api.resume();
   assert.match(ui.root.innerHTML, /value="week-3" selected/);
-  assert.match(ui.root.innerHTML, /Het schema voor week 3 volgt nog\./);
+  assert.match(ui.root.innerHTML, /2 x 5 R\/L 4kg/);
 });
 
 test('WhatsApp copy includes bold exercise names, the prescribed sets and weights, and notes', () => {
@@ -192,9 +194,9 @@ test('rehab completion is separate from notes, isolated by day/week, and survive
 test('a day without notes can be completed; future empty days cannot', () => {
   const { api } = load();
   const state = {};
-  assert.equal(api.setDayComplete(state, 'week-3', 'day-1', true), false);
+  assert.equal(api.setDayComplete(state, 'week-4', 'day-1', true), false);
   assert.equal(api.setExerciseComplete(state, 'week-2', 'day-1', 'missing', true), false);
-  assert.equal(api.dayProgress(state, 'week-3', 'day-1').complete, false);
+  assert.equal(api.dayProgress(state, 'week-4', 'day-1').complete, false);
   assert.equal(api.hasData(state), false);
   assert.equal(api.setDayComplete(state, 'week-2', 'day-1', true), true);
   assert.equal(api.hasNotes(state), false);
